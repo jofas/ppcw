@@ -42,7 +42,14 @@ program main
   ! number of timesteps to use
   integer :: Nstep = 100, Nsave = 5
 
+  character(len = *), parameter :: IO_FMT = "(8E16.8)"
   character(len = 80) :: file_out
+
+  ! create directory for the output files
+  call system("mkdir -p out")
+
+  ! remove output from previous run
+  call system("rm -f out/*")
 
   wind(XCoord) = 0.9
   wind(YCoord) = 0.4
@@ -51,18 +58,8 @@ program main
   collisions=0
 
   !read the initial data from a file
-  open(unit=1, file='input.dat', status='OLD')
-  do i = 1, Nbody
 
-    read(1, 11) mass(i), vis(i), &
-      pos (i, Xcoord), pos (i, Ycoord), pos (i, Zcoord), &
-      velo(i, Xcoord), velo(i, Ycoord), velo(i, Zcoord)
-
-    ! TODO: radius to constant
-    radius(i) = 0.5
-  end do
-  close(unit=1)
-
+  call read_data("input.dat")
 
   call system_clock(tstart, clock_rate, clock_max)
 
@@ -75,24 +72,14 @@ program main
       real(istop - istart) / real(clock_rate)
     print *, collisions, " collisions"
 
-    ! write result to a file
-    write(file_out, 12) 'output.dat', j * Nstep
-    open(unit=1, file=file_out)
-    do i = 1, Nbody
-      write(1,11) mass(i), vis(i), &
-        pos (i, Xcoord), pos (i, Ycoord), pos (i, Zcoord), &
-        velo(i, Xcoord), velo(i, Ycoord), velo(i, Zcoord)
-    end do
-    close(unit=1)
+    write(file_out, "(A14,I3.3)") 'out/output.dat', j * Nstep
+    call write_data(file_out)
   end do
 
   call system_clock(tstop, clock_rate, clock_max)
 
   print *, Nsave * Nstep, ' timesteps took ', &
     real(tstop - tstart) / real(clock_rate)
-
-  11 FORMAT(8E16.8)
-  12 FORMAT(A10,I3.3)
 
 contains
 
@@ -207,6 +194,35 @@ contains
       end do
 
     end do
+  end
+
+
+  subroutine read_data(filename)
+    character(len = *), intent(in) :: filename
+
+    open(unit=1, file=filename, status='OLD')
+    do i = 1, Nbody
+      read(1, IO_FMT) mass(i), vis(i), &
+        pos (i, Xcoord), pos (i, Ycoord), pos (i, Zcoord), &
+        velo(i, Xcoord), velo(i, Ycoord), velo(i, Zcoord)
+
+      ! TODO: radius to constant
+      radius(i) = 0.5
+    end do
+    close(unit=1)
+  end
+
+
+  subroutine write_data(filename)
+    character(len = *), intent(in) :: filename
+
+    open(unit=1, file=filename)
+    do i = 1, Nbody
+      write(1, IO_FMT) mass(i), vis(i), &
+        pos (i, Xcoord), pos (i, Ycoord), pos (i, Zcoord), &
+        velo(i, Xcoord), velo(i, Ycoord), velo(i, Zcoord)
+    end do
+    close(unit=1)
   end
 
 

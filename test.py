@@ -7,13 +7,14 @@ ERROR_LEVEL = 0.05
 
 
 def main():
-  for file1 in os.listdir("test/"):
-    file2 = "test/%s" % file1
+  for file in os.listdir("out/"):
+    baseline = "test/%s" % file
+    outfile = "out/%s" % file
 
-    print("comparing %s with %s:" % (file1, file2))
+    print("comparing %s:" % file)
 
 
-    d1, d2 = read_data(file1), read_data(file2)
+    d1, d2 = read_data(outfile), read_data(baseline)
 
     diff = np.fabs(d1 - d2)
     sum = np.fabs(d1 + d2)
