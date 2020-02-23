@@ -25,3 +25,16 @@ The program reads input.dat and writes output.dat.
 The directory Test contains source of a program to compare output.dat files.
 It will only report differences above a preset tolerance value.
 
+
+regression testing
+==================
+
+
+diff.py
+-------
+
+install dependencies:
+
+.. code:: bash
+
+    pip install numpy

@@ -76,12 +76,10 @@ program main
     print *, collisions, " collisions"
 
     ! write result to a file
-    ! TODO: why format? Try without
     write(file_out, 12) 'output.dat', j * Nstep
     open(unit=1, file=file_out)
     do i = 1, Nbody
-      ! TODO: don't write radius to file, unnecessary
-      write(1,11) mass(i), radius(i), vis(i), &
+      write(1,11) mass(i), vis(i), &
         pos (i, Xcoord), pos (i, Ycoord), pos (i, Zcoord), &
         velo(i, Xcoord), velo(i, Ycoord), velo(i, Zcoord)
     end do
@@ -93,7 +91,7 @@ program main
   print *, Nsave * Nstep, ' timesteps took ', &
     real(tstop - tstart) / real(clock_rate)
 
-  11 FORMAT(9E16.8)
+  11 FORMAT(8E16.8)
   12 FORMAT(A10,I3.3)
 
 contains

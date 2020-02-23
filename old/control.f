@@ -43,7 +43,7 @@ C
       DO j=1,Nsave
         CALL SYSTEM_CLOCK(istart,clock_rate,clock_max)
         CALL evolve(Nstep,dt)
-        CALL SYSTEM_CLOCK(istop,clock_rate,clock_max) 
+        CALL SYSTEM_CLOCK(istop,clock_rate,clock_max)
 
         WRITE(*,*) (Nstep), ' timesteps took ',
      $       REAL(istop-istart)/REAL(clock_rate)
@@ -54,18 +54,18 @@ C write result to a file
         WRITE(name,12) 'output.dat', j*Nstep
         OPEN(unit=1,file=name)
         DO i=1,Nbody
-          WRITE(1,11) mass(i),radius(i),vis(i),
+          WRITE(1,11) mass(i),vis(i),
      $      pos(i,Xcoord),pos(i,Ycoord),pos(i,Zcoord),
      $      velo(i,Xcoord),velo(i,Ycoord),velo(i,Zcoord)
         END DO
         CLOSE(unit=1)
       END DO
-      CALL SYSTEM_CLOCK(tstop,clock_rate,clock_max) 
+      CALL SYSTEM_CLOCK(tstop,clock_rate,clock_max)
 
       WRITE(*,*) (Nsave*Nstep), ' timesteps took ',
      $       REAL(tstop-tstart)/REAL(clock_rate)
 
-11    FORMAT(9E16.8)
+11    FORMAT(8E16.8)
 12    FORMAT(A10,I3.3)
 
       END
