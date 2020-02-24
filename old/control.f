@@ -26,7 +26,7 @@ C read the initial data from a file
       wind(YCoord) = 0.4
       wind(ZCoord) = 0.0
       collisions=0
-      OPEN(unit=1,file='input.dat',status='OLD')
+      OPEN(unit=1,file='data/input.dat',status='OLD')
       DO i=1,Nbody
         READ(1,11) mass(i),vis(i),
      $    pos(i,Xcoord),pos(i,Ycoord),pos(i,Zcoord),
@@ -38,9 +38,26 @@ C read the initial data from a file
 C
 C Run 20 timesteps and time how long it took
 C
-
       CALL SYSTEM_CLOCK(tstart,clock_rate,clock_max)
       DO j=1,Nsave
+C
+C Read data back from file, so testing is possible
+C
+#ifdef test
+        IF(j > 1) THEN
+          print *, "Reading from last output file"
+
+          WRITE(name,12) 'output.dat', (j-1)*Nstep
+          OPEN(unit=1,file=name,status='OLD')
+          DO i=1,Nbody
+            READ(1,11) mass(i),vis(i),
+     $        pos(i,Xcoord),pos(i,Ycoord),pos(i,Zcoord),
+     $        velo(i,Xcoord),velo(i,Ycoord),velo(i,Zcoord)
+            radius(i)=0.5
+          END DO
+          CLOSE(unit=1)
+        END IF
+#endif
         CALL SYSTEM_CLOCK(istart,clock_rate,clock_max)
         CALL evolve(Nstep,dt)
         CALL SYSTEM_CLOCK(istop,clock_rate,clock_max)

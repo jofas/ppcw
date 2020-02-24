@@ -1,16 +1,20 @@
-SRC=MD.f control.f util.f
+SRC=MD.f util.f
 OBJ=$(SRC:.f=.o)
 
-FFLAGS= -g -O0  -check uninit,bounds -no-vec
+FFLAGS= -g -O0  -check uninit,bounds -no-vec -fpp
 FC=ifort
 
-all: MD
+all: old_bench old_test
 
-MD: $(OBJ)
-	$(FC) $(FFLAGS)  -o $@  $(OBJ)
+old_bench: $(OBJ)
+	$(FC) $(FFLAGS)  -o ../bin/$@ control.f $(OBJ)
+
+old_test: $(OBJ)
+	$(FC) $(FFLAGS) -Dtest -o ../bin/$@ control.f $(OBJ)
 
 clean:
-	rm -f MD $(OBJ)
+	rm -f $(OBJ)
+	rm -f control.o
 
 $(OBJ): coord.inc Makefile
 

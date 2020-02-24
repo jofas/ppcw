@@ -30,8 +30,6 @@ program main
   ! interaction strength for pairwise interactions
   double precision :: G = 2d0
 
-
-  integer :: i, j
   integer :: clock_rate, clock_max
   integer :: tstart, tstop
   integer :: istart, istop
@@ -45,6 +43,9 @@ program main
   character(len = *), parameter :: IO_FMT = "(8E16.8)"
   character(len = 80) :: file_out
 
+  integer :: start = 1
+  integer :: i
+
   ! create directory for the output files
   call system("mkdir -p out")
 
@@ -57,13 +58,16 @@ program main
 
   collisions=0
 
-  !read the initial data from a file
-
-  call read_data("input.dat")
+#ifdef test
+  start = Nsave
+  call read_data("data/output.dat400")
+#else
+  call read_data("data/input.dat")
+#endif
 
   call system_clock(tstart, clock_rate, clock_max)
 
-  do j = 1, Nsave
+  do i = start, Nsave
     call system_clock(istart, clock_rate, clock_max)
     call evolve()
     call system_clock(istop, clock_rate, clock_max)
@@ -72,13 +76,13 @@ program main
       real(istop - istart) / real(clock_rate)
     print *, collisions, " collisions"
 
-    write(file_out, "(A14,I3.3)") 'out/output.dat', j * Nstep
+    write(file_out, "(A14,I3.3)") 'out/output.dat', i * Nstep
     call write_data(file_out)
   end do
 
   call system_clock(tstop, clock_rate, clock_max)
 
-  print *, Nsave * Nstep, ' timesteps took ', &
+  print *, Nsave * Nstep - (start - 1) * Nstep, ' timesteps took ', &
     real(tstop - tstart) / real(clock_rate)
 
 contains

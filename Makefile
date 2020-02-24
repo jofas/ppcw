@@ -1,7 +1,8 @@
-FFLAGS=-g -O0 -check uninit,bounds -no-vec -fpp #-Dtest
+FFLAGS=-g -O0 -check uninit,bounds -no-vec -fpp
 FC=ifort
 
-all: main
+all: bench test
+	mkdir -p bin
 	make -C diff-output/
 	make -C old/
 
@@ -9,7 +10,8 @@ clean:
 	make -C diff-output/ clean
 	make -C old/ clean
 
-main: src/main.f90
-	mkdir -p bin
+bench: src/main.f90
 	$(FC) $^ -o bin/$@ $(FFLAGS)
 
+test: src/main.f90
+	$(FC) $^ -o bin/$@ $(FFLAGS) -Dtest

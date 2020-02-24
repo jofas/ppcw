@@ -8,7 +8,7 @@ ERROR_LEVEL = 0.05
 
 def main():
   for file in os.listdir("out/"):
-    baseline = "test/%s" % file
+    baseline = "data/%s" % file
     outfile = "out/%s" % file
 
     print("comparing %s:" % file)

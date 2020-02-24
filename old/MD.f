@@ -54,7 +54,7 @@ C calculate central force
 
         DO i=1,Nbody
           DO l=1,Ndim
-                f(i,l) = f(i,l) - 
+                f(i,l) = f(i,l) -
      $              force(G*mass(i)*M_central,pos(i,l),r(i))
           END DO
         END DO
@@ -93,7 +93,7 @@ C
             DO l=1,Ndim
 C  flip force if close in
               IF( delta_r(k) .GE. Size ) THEN
-                f(i,l) = f(i,l) - 
+                f(i,l) = f(i,l) -
      $              force(G*mass(i)*mass(j),delta_pos(k,l),delta_r(k))
                 f(j,l) = f(j,l) +
      $              force(G*mass(i)*mass(j),delta_pos(k,l),delta_r(k))
