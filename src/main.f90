@@ -68,6 +68,14 @@ program main
   call system_clock(tstart, clock_rate, clock_max)
 
   do i = start, Nsave
+
+#ifdef test_all
+    if(i > 1) then
+      write(file_out, "(A14,I3.3)") 'out/output.dat', (i - 1) * Nstep
+      call read_data(file_out)
+    end if
+#endif
+
     call system_clock(istart, clock_rate, clock_max)
     call evolve()
     call system_clock(istop, clock_rate, clock_max)
@@ -204,6 +212,8 @@ contains
   subroutine read_data(filename)
     character(len = *), intent(in) :: filename
 
+    integer :: i
+
     open(unit=1, file=filename, status='OLD')
     do i = 1, Nbody
       read(1, IO_FMT) mass(i), vis(i), &
@@ -219,6 +229,8 @@ contains
 
   subroutine write_data(filename)
     character(len = *), intent(in) :: filename
+
+    integer :: i
 
     open(unit=1, file=filename)
     do i = 1, Nbody
