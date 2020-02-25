@@ -38,10 +38,13 @@ program main
   double precision :: dt = 0.02
 
   ! number of timesteps to use
-  integer :: Nstep = 100, Nsave = 5
+  integer :: Nstep = 100
+  integer, parameter :: Nsave = 5
 
   character(len = *), parameter :: IO_FMT = "(8E16.8)"
   character(len = 80) :: file_out
+
+  double precision, dimension(Nsave + 1) :: timings
 
   integer :: start = 1
   integer :: i
@@ -80,8 +83,9 @@ program main
     call evolve()
     call system_clock(istop, clock_rate, clock_max)
 
-    print *, Nstep, " timesteps took ", &
-      real(istop - istart) / real(clock_rate)
+    timings(i) = real(istop - istart) / real(clock_rate)
+
+    print *, Nstep, " timesteps took ", timings(i)
     print *, collisions, " collisions"
 
     write(file_out, "(A14,I3.3)") 'out/output.dat', i * Nstep
@@ -90,8 +94,17 @@ program main
 
   call system_clock(tstop, clock_rate, clock_max)
 
+  timings(Nsave + 1) = real(tstop - tstart) / real(clock_rate)
+
   print *, Nsave * Nstep - (start - 1) * Nstep, ' timesteps took ', &
-    real(tstop - tstart) / real(clock_rate)
+    timings(Nsave + 1)
+
+#if !defined test && !defined test_all
+  open(unit=1, file="bench.out")
+  write(1, "(6E16.8)") timings
+  close(unit=1)
+#endif
+
 
 contains
 
