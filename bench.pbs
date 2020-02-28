@@ -3,15 +3,15 @@
 #PBS -l select=1:ncpus=36
 #PBS -l place=excl
 #PBS -N bench_f
-#PBS -A d171
-#PBS -l walltime=0:14:0
+#PBS -A d171-s2000901
+#PBS -l walltime=10:00:00
+#PBS -j oe
 
 # Switch to current working directory
-cd $PBS_O_WORKDIR/Fortran
+cd $PBS_O_WORKDIR
 
-# Run the parallel program
 export OMP_NUM_THREADS=1
-./MD
 
-
-
+for i in $(seq 1 10); do
+  ./bin/old_bench
+done

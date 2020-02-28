@@ -100,7 +100,8 @@ program main
     timings(Nsave + 1)
 
 #if !defined test && !defined test_all
-  open(unit=1, file="bench.out")
+  open( unit=1, file="bench.out", action="write", position="append" &
+      , status="unknown" )
   write(1, "(6E16.8)") timings
   close(unit=1)
 #endif

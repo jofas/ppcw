@@ -20,6 +20,9 @@ C  number of timesteps to use.
       PARAMETER(Nstep=100,Nsave=5)
       CHARACTER*80 name
 
+C timings to save the benchmark results
+      double precision, dimension(Nsave + 1) :: timings
+
 C read the initial data from a file
 
       wind(XCoord) = 0.9
@@ -62,8 +65,9 @@ C
         CALL evolve(Nstep,dt)
         CALL SYSTEM_CLOCK(istop,clock_rate,clock_max)
 
-        WRITE(*,*) (Nstep), ' timesteps took ',
-     $       REAL(istop-istart)/REAL(clock_rate)
+        timings(j) = real(istop - istart) / real(clock_rate)
+
+        WRITE(*,*) (Nstep), ' timesteps took ', timings(j)
         write(*,*) collisions, ' collisions'
 
 
@@ -79,8 +83,17 @@ C write result to a file
       END DO
       CALL SYSTEM_CLOCK(tstop,clock_rate,clock_max)
 
-      WRITE(*,*) (Nsave*Nstep), ' timesteps took ',
-     $       REAL(tstop-tstart)/REAL(clock_rate)
+      timings(Nsave + 1) = real(tstop - tstart) / real(clock_rate)
+      WRITE(*,*) (Nsave*Nstep), ' timesteps took ', timings(Nsave + 1)
+
+
+#ifndef test
+      open( unit=1, file="bench_old.out", action="write"
+     $    , position="append", status="unknown" )
+      write(1, "(6E16.8)") timings
+      close(unit=1)
+#endif
+
 
 11    FORMAT(8E16.8)
 12    FORMAT(A10,I3.3)

@@ -2,6 +2,9 @@ import os
 import numpy as np
 
 
+from util import read_data
+
+
 WARN_LEVEL = 0.001
 ERROR_LEVEL = 0.05
 
@@ -31,12 +34,6 @@ def main():
     assert mx <= ERROR_LEVEL
 
     if mx > WARN_LEVEL: print("WARNING!")
-
-
-def read_data(file):
-  with open(file) as f:
-    return np.array([row.replace("  ", " ").split(" ")[1:]
-      for row in f.read().split("\n")[:-1]], dtype=np.float64)
 
 
 if __name__ == "__main__":
