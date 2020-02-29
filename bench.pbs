@@ -2,7 +2,7 @@
 #
 #PBS -l select=1:ncpus=36
 #PBS -l place=excl
-#PBS -N bench_f
+#PBS -N __bench
 #PBS -A d171-s2000901
 #PBS -l walltime=10:00:00
 #PBS -j oe
@@ -13,5 +13,5 @@ cd $PBS_O_WORKDIR
 export OMP_NUM_THREADS=1
 
 for i in $(seq 1 10); do
-  ./bin/old_bench
+  ./bin/bench
 done
