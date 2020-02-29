@@ -1,4 +1,4 @@
-FFLAGS=-g -O0 -check uninit,bounds -no-vec -fpp
+FFLAGS=-g -O0 -no-vec -fpp
 FC=ifort
 
 all: bench test test_all
