@@ -81,26 +81,79 @@ Fortran
 
 \section{Introduction} % {{{
 
+This paper documents the serial performance optimization conducted for
+a molecular dynamics program written in the Fortran programming
+language.
+The program reads data from $n$ molecules as its input and iterates
+a predefined amount of steps.
+Each step the data of the molecules (e.g.\ force, position in a three
+dimensional space, velocity) is updated.
+The program counts collisions between molecules and writes the
+data for each molecule of the simulation out at certain, also
+predefined, intervals.
+The original version of the program is not optimized for computational
+efficiency.
+
+This paper describes, documents and discusses the process of
+optimizing the original version of the program serially.
+The program was optimized for the Cirrus supercomputer, a tier-2
+UK national supercomputer of the engineering and physical sciences
+research council, which is hosted and maintained by the EPCC
+\citep{cirrus}.
+The compiler used was Intel's Fortran compiler \texttt{ifort}, version
+$18.0.5$ \citep{ifort}.
+The conducted optimizations range from choosing the appropriate
+compiler flags over rewriting performance critical sections of the
+program to hardware specific optimizations, like leveraging
+vectorization and cache optimizations.
+Since raw performance benefits are not all that is important for
+writing well performing and good programs, the maintainability and
+portability of the program are also looked at and discussed.
+
+% TODO: hint on the results
+
+This paper continues in Section~\ref{sec:md} with describing the
+molecular dynamics program in detail.
+Section~\ref{sec:setup} describes Cirrus and how the correctness of
+the program is tested with a regression test suite.
+Also the benchmark suite used for assessing the performance benefits
+of an optimization is outlined.
+Section~\ref{sec:opt} lists, describes and discusses all
+optimizations tested with their performance benefits.
+Afterwards, the results are discussed in Section~\ref{sec:dis}.
+At least a conclusion is given in Section~\ref{sec:con}.
 % }}}
 
 \section{Molecular Dynamics Program} % {{{
+\label{sec:md}
+
+This section describes what the molecular dynamics program, which is
+optimized, does.
+% describe the physics stuff here
 
 % }}}
 
-
 \section{Setup} % {{{
+\label{sec:setup}
+
+% Cirrus
+
+% test suite, benchmark suite
 
 % }}}
 
 \section{Optimizations} % {{{
+\label{sec:opt}
 
 % }}}
 
 \section{Discussion} % {{{
+\label{sec:dis}
 
 % }}}
 
 \section{Conclusion} % {{{
+\label{sec:con}
 
 % }}}
 
