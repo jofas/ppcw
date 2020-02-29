@@ -65,6 +65,9 @@ C
         CALL evolve(Nstep,dt)
         CALL SYSTEM_CLOCK(istop,clock_rate,clock_max)
 
+C        print *, "istop: ", istop, " istart: ", istart,
+C     $    " clock rate:", clock_rate
+
         timings(j) = real(istop - istart) / real(clock_rate)
 
         WRITE(*,*) (Nstep), ' timesteps took ', timings(j)
