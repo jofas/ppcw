@@ -1,4 +1,5 @@
-FFLAGS=-g -O0 -no-vec -fpp
+FFLAGS=-O3 -no-vec -ipo -xHost -fno-alias -no-prec-div \
+	-fp-model fast=2 -fpp
 FC=ifort
 
 all: bench test test_all
