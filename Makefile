@@ -1,4 +1,4 @@
-FFLAGS=-O3 -no-vec -fpp
+FFLAGS=-O3 -no-vec -fpp -p
 FC=ifort
 
 all: test test_all bench

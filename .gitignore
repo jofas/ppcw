@@ -1,6 +1,7 @@
 bin/
 out/
 *.pyc
+gmon.out
 
 # files from compiling
 old/*.o
