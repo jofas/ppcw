@@ -1,8 +1,7 @@
-FFLAGS=-O3 -no-vec -ipo -xHost -fno-alias -no-prec-div \
-	-fp-model fast=2 -fpp
+FFLAGS=-O3 -no-vec -fpp
 FC=ifort
 
-all: bench test test_all
+all: test test_all bench
 	@mkdir -p bin
 	@make -C diff-output/
 	@make -C old/
@@ -12,7 +11,7 @@ clean:
 	@make -C old/ clean
 
 bench: src/main.f90
-	$(FC) $^ -o bin/$@ $(FFLAGS)
+	$(FC) $^ -o bin/$@ $(FFLAGS) -qopt-report=5
 
 test: src/main.f90
 	$(FC) $^ -o bin/$@ $(FFLAGS) -Dtest
