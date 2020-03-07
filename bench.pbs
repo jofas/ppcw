@@ -4,7 +4,7 @@
 #PBS -l place=excl
 #PBS -N __bench
 #PBS -A d171-s2000901
-#PBS -l walltime=10:00:00
+#PBS -l walltime=00:20:00
 #PBS -j oe
 
 # Switch to current working directory

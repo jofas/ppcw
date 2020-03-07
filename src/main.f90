@@ -3,7 +3,6 @@ program main
 
   !
   ! Nbody	    number of particles
-  ! Npair    	number of particle pairs
   ! pos		    position of the particles
   ! r         distance of particle from central mass
   ! velo		  velocity of the particles
@@ -14,13 +13,15 @@ program main
   ! delta_r		separation for each particle pair
   !
   integer, parameter :: Nbody = 4 * 1024, Ndim = 3
-  integer :: Npair = (Nbody * (Nbody - 1)) / 2
   integer :: Xcoord = 1, Ycoord = 2, Zcoord = 3
 
-  double precision, dimension(Nbody) :: r, vis, mass, radius
-  double precision, dimension(Nbody, Ndim) :: f, pos, velo
-  double precision, dimension(Nbody * Nbody, Ndim) :: delta_pos
-  double precision, dimension(Nbody * Nbody) :: delta_r
+  ! when distance between two particles is smaller than
+  ! delta_threshold the force is flipped
+  double precision :: delta_threshold = 1.0
+
+  double precision, dimension(Nbody) :: vis, mass
+  !double precision, dimension(Nbody, Ndim) :: pos, velo, f
+  double precision, dimension(Ndim, Nbody) :: pos, velo, f
   double precision, dimension(Ndim) :: wind
   integer :: collisions
 
@@ -48,6 +49,8 @@ program main
 
   integer :: start = 1
   integer :: i
+
+  f(:,:) = 0.0
 
   ! create directory for the output files
   call system("mkdir -p out")
@@ -111,118 +114,63 @@ contains
 
 
   subroutine evolve() ! {{{
-    double precision :: force, size
-    logical :: collided
-    integer :: step, i, j, k, l
+
+    double precision :: r, dd_pos
+    double precision, dimension(Ndim) :: d_pos, pairwise_force, &
+      fi, posi, veloi
+    integer :: step, i, j
+
+    !double precision, dimension(:), contiguous, pointer :: fi_pt
+    !!dir$ attributes aligned : 64 :: fi_pt
 
     do step = 1, Nstep
       print *, 'timestep ', step
       print *, 'collisions ', collisions
 
-      ! set the viscosity term in the force calculation
-      do j = 1, Ndim
-        do i = 1, Nbody
-          f(i,j) = -vis(i) * velo(i, j)
-        end do
-      end do
-
-      ! add the wind term in the force calculation
-      do j = 1, Ndim
-        do i = 1, Nbody
-          f(i,j) = f(i,j) - vis(i) * wind(j)
-        end do
-      end do
-
-      ! calculate distance from central mass
-      do k = 1, Nbody
-        r(k) = 0.0
-      end do
-      do j = 1, Ndim
-        do i = 1, Nbody
-          r(i) = r(i) + pos(i,j) * pos(i,j)
-        end do
-      end do
-      do k = 1, Nbody
-        r(k) = sqrt(r(k))
-      end do
-
-      ! calculate central force
+      ! not vectorizable: dependency on f(j,:)
       do i = 1, Nbody
-        do l = 1, Ndim
-          f(i,l) = f(i,l) - G * mass(i) * M_central * pos(i,l) &
-                 / (r(i) ** 3)
-        end do
-      end do
+        fi(:) = 0.0
+        posi(:) = pos(:,i)
+        veloi(:) = velo(:,i)
 
-      ! calculate pairwise separation of particles
-      k = 1
-      do i = 1, Nbody
-        do j = i+1, Nbody
-          do l = 1, Ndim
-            delta_pos(k,l) = pos(i,l) - pos(j,l)
-          end do
-          k = k + 1
-        end do
-      end do
+        !$omp simd private(d_pos, dd_pos, pairwise_force) &
+        !$omp      reduction(+:fi) &
+        !$omp      reduction(+:collisions)
+        do j = i + 1, Nbody
 
-      ! calculate norm of seperation vector
-      do k = 1, Npair
-        delta_r(k) = 0.0
-      end do
-      do j = 1, Ndim
-        do i = 1, Npair
-          delta_r(i) = delta_r(i) + delta_pos(i,j) * delta_pos(i, j)
-        end do
-      end do
-      do k = 1, Npair
-        delta_r(k) = SQRT(delta_r(k))
-      end do
+          ! fused and unrolled
+          d_pos(:) = posi(:) - pos(:,j)
+          dd_pos   = sqrt(sum(d_pos(:) ** 2))
 
-      ! add pairwise forces
-      k = 1
-      do i = 1, Nbody
-        do j = i+1, Nbody
-          collided = .false.
-          Size = radius(i) + radius(j)
-          do l = 1, Ndim
+          ! unrolled
+          pairwise_force(:) = &
+            G * mass(i) * mass(j) * d_pos(:) / (dd_pos ** 3)
 
-            !  flip force if close in
-            if (delta_r(k) .GE. Size) then
-              f(i,l) = f(i,l) - G * mass(i) * mass(j) * delta_pos(k,l) &
-                     / (delta_r(k) ** 3)
-
-              f(j,l) = f(j,l) + G * mass(i) * mass(j) * delta_pos(k,l) &
-                     / (delta_r(k) ** 3)
-            else
-              f(i,l) = f(i,l) + G * mass(i) * mass(j) * delta_pos(k,l) &
-                     / (delta_r(k) ** 3)
-              f(j,l) = f(j,l) - G * mass(i) * mass(j) * delta_pos(k,l) &
-                     / (delta_r(k) ** 3)
-              collided = .true.
-            end if
-          end do
-
-          if (collided) then
+          if(dd_pos < delta_threshold) then
+            pairwise_force(:) = -pairwise_force(:)
             collisions = collisions + 1
           end if
-          k = k + 1
-        end do
-      end do
 
-      ! update positions
-      do i = 1, Nbody
-        do j = 1, Ndim
-          pos(i,j) = pos(i,j) + dt * velo(i,j)
+          fi(:)  = fi(:)  - pairwise_force(:)
+          f(:,j) = f(:,j) + pairwise_force(:)
         end do
-      end do
+        !$omp end simd
 
-      ! update velocities
-      do i = 1, Nbody
-        do j = 1, Ndim
-          velo(i,j) = velo(i,j) + dt * (f(i,j) / mass(i))
-        end do
-      end do
+        ! vectorized with -vec-threshold0
+        r = sqrt(sum(posi(:) ** 2)) ** 3
 
+        !fi_pt => f(:,i)
+
+        ! all below are fused and vectorized
+        fi(:) = f(:,i) + fi(:)
+        fi(:) = fi(:) - vis(i) * (veloi(:) + wind(:))
+        fi(:) = fi(:) - G * mass(i) * M_central * posi(:) / r
+        fi(:) = fi(:) / mass(i)
+
+        pos(:,i)  = posi(:) + dt * veloi(:)
+        velo(:,i) = veloi(:) + dt * fi(:)
+        f(:,i) = 0.0
+      end do
     end do
   end ! }}}
 
@@ -235,11 +183,8 @@ contains
     open(unit=1, file=filename, status='OLD')
     do i = 1, Nbody
       read(1, IO_FMT) mass(i), vis(i), &
-        pos (i, Xcoord), pos (i, Ycoord), pos (i, Zcoord), &
-        velo(i, Xcoord), velo(i, Ycoord), velo(i, Zcoord)
-
-      ! TODO: radius to constant
-      radius(i) = 0.5
+        pos (Xcoord, i), pos (Ycoord, i), pos (Zcoord, i), &
+        velo(Xcoord, i), velo(Ycoord, i), velo(Zcoord, i)
     end do
     close(unit=1)
   end ! }}}
@@ -253,11 +198,9 @@ contains
     open(unit=1, file=filename)
     do i = 1, Nbody
       write(1, IO_FMT) mass(i), vis(i), &
-        pos (i, Xcoord), pos (i, Ycoord), pos (i, Zcoord), &
-        velo(i, Xcoord), velo(i, Ycoord), velo(i, Zcoord)
+        pos (Xcoord, i), pos (Ycoord, i), pos (Zcoord, i), &
+        velo(Xcoord, i), velo(Ycoord, i), velo(Zcoord, i)
     end do
     close(unit=1)
   end ! }}}
-
-
 end

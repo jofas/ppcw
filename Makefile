@@ -1,4 +1,6 @@
-FFLAGS=-O3 -no-vec -fpp -p
+FFLAGS_BENCH=-qopt-report=5 #-p
+FFLAGS=-O3 -fpp -qopenmp -vec-threshold0 -xCORE-AVX2 \
+	-align array64byte #-mkl
 FC=ifort
 
 all: test test_all bench
@@ -11,7 +13,7 @@ clean:
 	@make -C old/ clean
 
 bench: src/main.f90
-	$(FC) $^ -o bin/$@ $(FFLAGS) -qopt-report=5
+	$(FC) $^ -o bin/$@ $(FFLAGS) $(FFLAGS_BENCH)
 
 test: src/main.f90
 	$(FC) $^ -o bin/$@ $(FFLAGS) -Dtest
