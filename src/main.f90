@@ -1,6 +1,8 @@
 program main
   implicit none
 
+  !include "mkl.fi"
+
   !
   ! Nbody	    number of particles
   ! pos		    position of the particles
@@ -20,8 +22,8 @@ program main
   double precision :: delta_threshold = 1.0
 
   double precision, dimension(Nbody) :: vis, mass
-  !double precision, dimension(Nbody, Ndim) :: pos, velo, f
-  double precision, dimension(Ndim, Nbody) :: pos, velo, f
+  double precision, dimension(Nbody, Ndim) :: pos, velo, f
+  !double precision, dimension(Ndim, Nbody) :: pos, velo, f
   double precision, dimension(Ndim) :: wind
   integer :: collisions
 
@@ -116,22 +118,15 @@ contains
   subroutine evolve() ! {{{
 
     double precision :: r, dd_pos
-    double precision, dimension(Ndim) :: d_pos, pairwise_force, &
-      fi, posi, veloi
+    double precision, dimension(Ndim) :: d_pos, pairwise_force, fi
     integer :: step, i, j
-
-    !double precision, dimension(:), contiguous, pointer :: fi_pt
-    !!dir$ attributes aligned : 64 :: fi_pt
 
     do step = 1, Nstep
       print *, 'timestep ', step
       print *, 'collisions ', collisions
 
-      ! not vectorizable: dependency on f(j,:)
       do i = 1, Nbody
         fi(:) = 0.0
-        posi(:) = pos(:,i)
-        veloi(:) = velo(:,i)
 
         !$omp simd private(d_pos, dd_pos, pairwise_force) &
         !$omp      reduction(+:fi) &
@@ -139,7 +134,7 @@ contains
         do j = i + 1, Nbody
 
           ! fused and unrolled
-          d_pos(:) = posi(:) - pos(:,j)
+          d_pos(:) = pos(i,:) - pos(j,:)
           dd_pos   = sqrt(sum(d_pos(:) ** 2))
 
           ! unrolled
@@ -147,29 +142,31 @@ contains
             G * mass(i) * mass(j) * d_pos(:) / (dd_pos ** 3)
 
           if(dd_pos < delta_threshold) then
+            ! unrolled
             pairwise_force(:) = -pairwise_force(:)
             collisions = collisions + 1
           end if
 
+          ! fused and unrolled
           fi(:)  = fi(:)  - pairwise_force(:)
-          f(:,j) = f(:,j) + pairwise_force(:)
+          f(j,:) = f(j,:) + pairwise_force(:)
         end do
         !$omp end simd
 
         ! vectorized with -vec-threshold0
-        r = sqrt(sum(posi(:) ** 2)) ** 3
+        r = sqrt(sum(pos(i,:) ** 2)) ** 3
 
-        !fi_pt => f(:,i)
+        !dir$ vector aligned
+        do j = 1, Ndim
+          fi(j) = fi(j) + f(i,j)
+          fi(j) = fi(j) - vis(i) * (velo(i,j) + wind(j))
+          fi(j) = fi(j) - G * mass(i) * M_central * pos(i,j) / r
+          fi(j) = fi(j) / mass(i)
 
-        ! all below are fused and vectorized
-        fi(:) = f(:,i) + fi(:)
-        fi(:) = fi(:) - vis(i) * (veloi(:) + wind(:))
-        fi(:) = fi(:) - G * mass(i) * M_central * posi(:) / r
-        fi(:) = fi(:) / mass(i)
-
-        pos(:,i)  = posi(:) + dt * veloi(:)
-        velo(:,i) = veloi(:) + dt * fi(:)
-        f(:,i) = 0.0
+          pos(i,j)  = pos(i,j) + dt * velo(i,j)
+          velo(i,j) = velo(i,j) + dt * fi(j)
+          f(i,j) = 0.0
+        end do
       end do
     end do
   end ! }}}
@@ -183,8 +180,8 @@ contains
     open(unit=1, file=filename, status='OLD')
     do i = 1, Nbody
       read(1, IO_FMT) mass(i), vis(i), &
-        pos (Xcoord, i), pos (Ycoord, i), pos (Zcoord, i), &
-        velo(Xcoord, i), velo(Ycoord, i), velo(Zcoord, i)
+        pos (i, Xcoord), pos (i, Ycoord), pos (i, Zcoord), &
+        velo(i, Xcoord), velo(i, Ycoord), velo(i, Zcoord)
     end do
     close(unit=1)
   end ! }}}
@@ -198,8 +195,8 @@ contains
     open(unit=1, file=filename)
     do i = 1, Nbody
       write(1, IO_FMT) mass(i), vis(i), &
-        pos (Xcoord, i), pos (Ycoord, i), pos (Zcoord, i), &
-        velo(Xcoord, i), velo(Ycoord, i), velo(Zcoord, i)
+        pos (i, Xcoord), pos (i, Ycoord), pos (i, Zcoord), &
+        velo(i, Xcoord), velo(i, Ycoord), velo(i, Zcoord)
     end do
     close(unit=1)
   end ! }}}

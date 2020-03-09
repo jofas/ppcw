@@ -1,6 +1,6 @@
 FFLAGS_BENCH=-qopt-report=5 #-p
 FFLAGS=-O3 -fpp -qopenmp -vec-threshold0 -xCORE-AVX2 \
-	-align array64byte #-mkl
+	-align array64byte
 FC=ifort
 
 all: test test_all bench
