@@ -23,7 +23,6 @@ program main
 
   double precision, dimension(Nbody) :: vis, mass
   double precision, dimension(Nbody, Ndim) :: pos, velo, f
-  !double precision, dimension(Ndim, Nbody) :: pos, velo, f
   double precision, dimension(Ndim) :: wind
   integer :: collisions
 
@@ -116,10 +115,8 @@ contains
 
 
   subroutine evolve() ! {{{
-
-    double precision :: r, dd_pos
-    double precision, dimension(Ndim) :: d_pos, pairwise_force, fi
-    integer :: step, i, j
+    double precision, dimension(Ndim) :: fi
+    integer :: step, i
 
     do step = 1, Nstep
       print *, 'timestep ', step
@@ -127,49 +124,70 @@ contains
 
       do i = 1, Nbody
         fi(:) = 0.0
-
-        !$omp simd private(d_pos, dd_pos, pairwise_force) &
-        !$omp      reduction(+:fi) &
-        !$omp      reduction(+:collisions)
-        do j = i + 1, Nbody
-
-          ! fused and unrolled
-          d_pos(:) = pos(i,:) - pos(j,:)
-          dd_pos   = sqrt(sum(d_pos(:) ** 2))
-
-          ! unrolled
-          pairwise_force(:) = &
-            G * mass(i) * mass(j) * d_pos(:) / (dd_pos ** 3)
-
-          if(dd_pos < delta_threshold) then
-            ! unrolled
-            pairwise_force(:) = -pairwise_force(:)
-            collisions = collisions + 1
-          end if
-
-          ! fused and unrolled
-          fi(:)  = fi(:)  - pairwise_force(:)
-          f(j,:) = f(j,:) + pairwise_force(:)
-        end do
-        !$omp end simd
-
-        ! vectorized with -vec-threshold0
-        r = sqrt(sum(pos(i,:) ** 2)) ** 3
-
-        !dir$ vector aligned
-        do j = 1, Ndim
-          fi(j) = fi(j) + f(i,j)
-          fi(j) = fi(j) - vis(i) * (velo(i,j) + wind(j))
-          fi(j) = fi(j) - G * mass(i) * M_central * pos(i,j) / r
-          fi(j) = fi(j) / mass(i)
-
-          pos(i,j)  = pos(i,j) + dt * velo(i,j)
-          velo(i,j) = velo(i,j) + dt * fi(j)
-          f(i,j) = 0.0
-        end do
+        call compute_pairwise_forces(i, fi)
+        call update_particles(i, fi)
       end do
     end do
   end ! }}}
+
+
+  subroutine compute_pairwise_forces(i, fi)
+    integer, intent(in) :: i
+    double precision, dimension(Ndim), intent(inout) :: fi
+
+    integer :: j
+    double precision :: dd_pos
+    double precision, dimension(Ndim) :: d_pos, pairwise_force
+
+    !$omp simd private(d_pos, dd_pos, pairwise_force) &
+    !$omp      reduction(+:fi) &
+    !$omp      reduction(+:collisions)
+    do j = i + 1, Nbody
+
+      ! fused and unrolled
+      d_pos(:) = pos(i,:) - pos(j,:)
+      dd_pos   = sqrt(sum(d_pos(:) ** 2))
+
+      ! unrolled
+      pairwise_force(:) = &
+        G * mass(i) * mass(j) * d_pos(:) / (dd_pos ** 3)
+
+      if(dd_pos < delta_threshold) then
+        ! unrolled
+        pairwise_force(:) = -pairwise_force(:)
+        collisions = collisions + 1
+      end if
+
+      ! fused and unrolled
+      fi(:)  = fi(:)  - pairwise_force(:)
+      f(j,:) = f(j,:) + pairwise_force(:)
+    end do
+    !$omp end simd
+  end
+
+
+  subroutine update_particles(i, fi)
+    integer, intent(in) :: i
+    double precision, dimension(Ndim), intent(inout) :: fi
+
+    integer :: j
+    double precision :: r
+
+    ! vectorized with -vec-threshold0
+    r = sqrt(sum(pos(i,:) ** 2)) ** 3
+
+    !dir$ vector aligned
+    do j = 1, Ndim
+      fi(j) = fi(j) + f(i,j)
+      fi(j) = fi(j) - vis(i) * (velo(i,j) + wind(j))
+      fi(j) = fi(j) - G * mass(i) * M_central * pos(i,j) / r
+      fi(j) = fi(j) / mass(i)
+
+      pos(i,j)  = pos(i,j) + dt * velo(i,j)
+      velo(i,j) = velo(i,j) + dt * fi(j)
+      f(i,j) = 0.0
+    end do
+  end
 
 
   subroutine read_data(filename) ! {{{
