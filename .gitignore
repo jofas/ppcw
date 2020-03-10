@@ -2,6 +2,7 @@ bin/
 out/
 *.pyc
 gmon.out
+vtune/
 
 # files from compiling
 old/*.o
