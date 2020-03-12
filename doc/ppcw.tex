@@ -322,6 +322,34 @@ computational effort of the simulation.
 \section{Optimizations} % {{{
 \label{sec:opt}
 
+This section documents the process of performance optimization of the
+program.
+Focus lies more on the process, not the results.
+All the successively performed optimizations are described.
+Code quality in form of readability, portability and maintainability
+is taken into account during the whole process and the optimizations
+are all looked at from this perspective.
+The optimization process can basically broken down into four phases:
+(\romannumeral 1) restructuring the source code without changing
+the critical section,
+(\romannumeral 2) trying out compiler flags, (\romannumeral 3)
+rewriting the program for better performance and (\romannumeral 4)
+trying compiler flags on the rewritten version of the program again.
+
+% continue here 1st phase
+
+
+% journey through time
+
+% discuss every thought I had
+
+% use pseudo code and small fortran snippets for visualization
+
+% make it clear that I could use common sense most of the time,
+% but include vtune results and io time
+
+% checkpoints: 1. flags, 2. rewriting 3. flags again
+
 % }}}
 
 \section{Discussion} % {{{
