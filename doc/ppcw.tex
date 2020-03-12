@@ -100,8 +100,9 @@ The program was optimized for the Cirrus supercomputer, a tier-2
 UK national supercomputer of the engineering and physical sciences
 research council, which is hosted and maintained by the EPCC
 \citep{cirrus}.
-The compiler used was Intel's Fortran compiler \texttt{ifort}, version
-$18.0.5$ \citep{ifort}.
+The compilers used were Intel's Fortran compiler \texttt{ifort},
+version $18.0.5$ and $19.0.0$ for the linux operating system
+\citep{ifort18, ifort19}.
 The conducted optimizations range from choosing the appropriate
 compiler flags over rewriting performance critical sections of the
 program to hardware specific optimizations, like leveraging
@@ -129,7 +130,97 @@ At least a conclusion is given in Section~\ref{sec:con}.
 
 This section describes what the molecular dynamics program, which is
 optimized, does.
-% describe the physics stuff here
+The program is a simple molecular dynamics program.
+It reads data from $n$ particles from a file.
+In the following, subscripts $1 \leq i \leq n$ refer to a particle
+of the simulation.
+The data for a particle $i$ is its mass $m_i$, the viscosity of
+a fluid $i$ is part of $vis_i$, the position of the particle's center
+in a three dimensional space $\vec{p}_i$, which is relative to a large
+central mass and its velocity $\vec{v}_i$.
+The program iterates a predefined amount of iterations.
+Each iteration represents a time step in the particle simulation.
+The time is updated by a constant value $\Delta_t$.
+Every step the position and the velocity of each particle is
+updated, based on the gravitational forces operating on each particle.
+The gravitational forces are the forces between each particle and the
+gravitational force coming from the central mass.
+The particles are part of a fluid, which means the viscosity of
+the fluid must also be taken into account.
+The last external force operating on a particle is wind $\vec{w}$,
+which is a constant vector over the whole simulation.
+
+The gravitational forces are computed based on Newton's law of
+universal gravitation.
+It states, that any two physical objects attract each other
+with a force, which is proportional to the mass of both objects and
+inversely proportional to the squared distance between both
+\citep{feynman1963}.
+The scalar gravitational force $F$ between two objects 1 and 2 can be
+mathematically described as:
+\begin{align}
+  F_{1,2} = G\frac{m_1 m_2}{||\vec{p}_1 - \vec{p}_2||_2^2},
+\end{align}
+where $G$ is the gravitational constant, $m_i$ the mass of object $i$
+and $||\vec{p}_1 - \vec{p}_2||_2$ the Euclidean or $L_2$ distance
+between the centers of both objects.
+The vector form of the gravitational force object 2 operates on object
+1, which also accounts for the direction of the force, is given by:
+\begin{align}
+  \vec{F}_{1\leftarrow2} = -F_{1,2}\frac{\vec{p}_1 - \vec{p}_2}
+                   {||\vec{p}_1 - \vec{p}_2||_2}
+          = -G\frac{m_1 m_2 (\vec{p}_1 - \vec{p}_2)}
+                   {||\vec{p}_1 - \vec{p}_2||_2^3}.
+\end{align}
+The gravitational force, which object 1 operates on object 2 is the
+additive inverse of $\vec{F}_{1 \leftarrow 2}$:
+$\vec{F}_{2 \leftarrow 1} = -\vec{F}_{1 \leftarrow 2}$.
+If particles collide, the gravitational forces between the two object
+are negated.
+The program finds collisions, by checking if the distance of two
+particles is smaller than a threshold $\tau_{1,2}$, which is the sum
+of the radii of the two particles.
+For the program, all particles have a radius of $\frac{1}{2}$, so the
+threshold for a collision is $1$.
+Now we can define a pairwise gravitational forces function for the
+particles of the simulation as:
+\begin{align}
+  f_{1 \leftarrow 2} := \begin{cases}
+    \vec{F}_{1 \leftarrow 2} &\text{if }
+      ||\vec{p}_1 - \vec{p}_2||_2 \ge \tau_{1,2} \\
+    -\vec{F}_{1 \leftarrow 2} &\text{otherwise}
+  \end{cases}.
+\end{align}
+Other than the pairwise gravitational forces between the particles,
+there is the gravitational force of the central mass
+$\vec{F}_{1 \leftarrow central}$.
+The central mass lies at the origin of the three dimensional space,
+which means its position vector $\vec{p}_{central} = 0$.
+
+The viscosity of the fluid is another force operating on a particle.
+It is simply the negative of the viscosity of the fluid multiplied
+by the velocity vector of particle $i: -vis_i \vec{v}_i$.
+Shear velocity of the fluid is not taken into account.
+Lastly, there is the wind force, which is simply the negated viscosity
+of the fluid particle $i$ is part of multiplied by the wind vector:
+$-vis_i \vec{w}$.
+
+The overall force per iteration operating on particle $i$ can now
+be described as:
+\begin{align}
+  \vec{F}_i = -vis_i(\vec{v}_i + \vec{w}) +
+              \vec{F}_{i \leftarrow central} +
+              \sum_{j\neq i}^n f_{i \leftarrow j}.
+\end{align}
+
+Based on $\vec{F}_i$ we can now update $\vec{p}_i$ and $\vec{v}_i$:
+\begin{align}
+  \vec{p}_i &= \vec{p}_i + \Delta_t \vec{v}_i \\
+  \vec{v}_i &= \vec{v}_i + \Delta_t \frac{\vec{F}_i}{m_i}.
+\end{align}
+The iterations of the program are broken down into supersteps.
+On completion of a superstep, the updated particles are exported to a
+file with the same format as the input file.
 
 % }}}
 
