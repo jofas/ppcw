@@ -334,9 +334,12 @@ are all looked at from this perspective.
 The optimization process can basically broken down into four phases:
 (\romannumeral 1) rewriting the source code to Fortran 90,
 restructuring the source code without changing the critical section,
-(\romannumeral 2) trying out compiler flags, (\romannumeral 3)
-rewriting the program for better performance and (\romannumeral 4)
-trying compiler flags on the rewritten version of the program again.
+(\romannumeral 2) enabling basic compiler optimizations,
+(\romannumeral 3) rewriting the program for better performance and
+(\romannumeral 4) trying out more advanced compiler optimizations on
+the rewritten version of the program again.
+
+\subsection{First Phase} % {{{
 
 The first phase of optimization only concerns itself with increasing
 the maintainability of the program.
@@ -450,12 +453,170 @@ impact. [WIND]
 \label{fig:common_unaligned}
 \end{figure}
 
+% }}}
 
-% phase 2 (table)
+\subsection{Second Phase} % {{{
 
-% phase 3
+The second phase was about using the more common compiler flags to
+enhance the performance of the Fortran 90 version.
+The compiler flags used in phase one not only hinder compiler
+optimizations with \texttt{-O0}, they even make the code perform worse
+by adding the out-of-bounds access and uninitialized variables flags.
+Therefore the first step to better performing code was to utilize the
+compiler.
+This phase was not about finding a definitive set of flags, but only
+a first step to see how much the compiler can achieve using the
+more common compiler flags for optimization.
+It was more motivated by the still horrible runtime of 1110 seconds,
+which hinders rapid development during the third phase.
+Table~\ref{tab:p2} shows all the different flags tried and how they
+impacted performance.
 
-% phase 4
+The first act was to remove the unnecessary checks for out-of-bounds
+access of arrays and using uninitialized variables.
+The Fortran 90 version of the code is riddled with loops, so removing
+the checks for each should have quite the impact on performance.
+As it turned out it did.
+Removing the checks improved the average overall time by $33\%$.
+That means $1/3$ of the time was spent checking for out-of-bounds
+access and the use of uninitialized variables.
+
+The next step was to gradually increase the level of compiler
+optimization from \texttt{-O0} to \texttt{-O3}.
+The first level of optimization \texttt{-O1} enables speed
+optimizations that do not enlarge binary size.
+Optimizations done include data-flow analysis, test replacement and
+instruction scheduling.
+\texttt{-O1} is designed for large codes with many branches that
+are not loops \citep{o}.
+While this description does not fit to the program at all, which
+has only one significant branch (code structure is discussed below)
+and spends most of its time in loops, \texttt{-O1} still increases
+the performance by 44\%.
+Average overall time is reduced from 734 seconds to 413 seconds
+(see Table~\ref{tab:p2}).
+
+\texttt{-O2} is the recommended level of compiler optimization.
+It performs basic loop optimizations like interchanging, unrolling or
+scalar replacements.
+Furthermore inlining, intra-file ipo (interprocedural optimization),
+dead code elimination and many more optimizations are enabled
+\citep[see][]{o}.
+Enabling \texttt{-O2} reduced the average overall time down to
+85 seconds, which is 79\% better than the program compiled with
+\texttt{-O1} (see Table~\ref{tab:p2}).
+
+\texttt{-O3} enables more aggressive optimizations concerning loops
+and memory access transformations, additionally to the optimizations
+done using \texttt{-O2}.
+Optimizations include loop fusion and collapsing if statements.
+It is the recommended level of optimization for floating point
+operation heavy programs that spend a lot of time in loops
+\citep{o}.
+This exactly describes the molecular dynamics program and
+\texttt{-O3} actually increases the performance further.
+The average overall time was further reduced from 85 seconds down
+to 62 seconds.
+This is an additional 27\% improvement over \texttt{-O2}
+(see Table~\ref{tab:p2}).
+
+At this point, vectorization was still disabled with the
+\texttt{-no-vec} flag.
+Enabling vectorization on the yet unoptimized Fortran 90 program
+resulted in a regression of the average overall time of 33\%
+(see Table~\ref{tab:p2}).
+Like described above, the second phase is only about finding a
+set of compiler optimizations that would enable a more rapid analysis
+of the performance in the crucial third phase.
+This is the reason why the drop in performance was not analyzed
+further.
+For the unoptimized Fortran 90 version of the program somehow
+vectorization seems to cancel optimizations from \texttt{-O3}.
+The guess at this point was that the program profits more from
+optimizations from \texttt{-O3} (like loop unrolling) than
+from being vectorized.
+
+Lastly other common flags for compiler optimization were considered.
+Two recommended options besides \texttt{-O3} are \texttt{-ipo} and
+\texttt{-xHOST} \citep{user389}.
+Neither would improve the performance of the program.
+\texttt{-ipo} enables interprocedural optimizations between files
+\citep{ipo}.
+The program only consists of a single file, so \texttt{-ipo} would
+not improve performance.
+\texttt{-xHOST} forces the compiler to generate instructions from the
+highest instruction set supproted by the host \citep{xhost}.
+The host is a frontend node of Cirrus in this case.
+The frontend nodes of Cirrus are the same as its compute nodes.
+The highest instruction set supported is AVX2
+(see Section~\ref{sec:setup}).
+\texttt{-no-vec}, which is still enabled at this point, cancels out
+\texttt{-xHOST}.
+
+Lastly \texttt{-Ofast} was tested.
+\texttt{-Ofast} is a shorthand compiler flag, which combines
+\texttt{-O3} with a faster floating point model than the default one.
+It sets \texttt{-O3}, \texttt{-no-prec-div} and
+\texttt{-fp-model fast=2} \citep{ofast}.
+\texttt{-no-prec-div} increases the speed of floating point divisions.
+The cost of this flag is a reduction in precision \citep{no_prec_div}.
+\texttt{-fp-model fast=2} works the same way.
+It increases the performance on the cost of less precise results of
+floating point operations \citep{fp_model}.
+Enabling \texttt{-Ofast} does not result in less accurate test
+results.
+The program's correctness is still given, even though floating point
+precision was lowered.
+\texttt{-Ofast} does not increase the performance compared to
+\texttt{-O3} (see Table~\ref{tab:p2}).
+
+Phase two was terminated at this point.
+The best compiler flags determined were \texttt{-O3} with
+\texttt{-no-vec}.
+The average overall time after phase two is 62 seconds.
+This is an improvement of a staggering 94\% over the results after
+phase one (1110 seconds), simply by enabling compiler optimization
+and removing unnecessary checks.
+
+\begin{table}
+  \begin{tabu}{|l|X|l|X|X|}
+    \hline
+    Optimization &$\emptyset$ overall time
+                 &$\emptyset$ superstep time  &$+/-\%$ &Status \\
+    \hline
+    Removed checks &734s &147s &33\% &Improvement \\
+    \hline
+    \texttt{-O1} &413s &83s &44\% &Improvement \\
+    \hline
+    \texttt{-O2} &85s &17s &79\% &Improvement \\
+    \hline
+    \texttt{-O3} &62s &12s &27\% &Improvement \\
+    \hline
+    Removed \texttt{-no-vec} &82s &16s &-33\% &Regression \\
+    \hline
+    \texttt{-Ofast} &62s &12s &0\% &Invariant \\
+    \hline
+  \end{tabu}
+  \caption{Compiler flags tried during the second phase of
+    optimization. The $+/-\%$ column displays the
+    variation in average overall time from the best version of the
+    program so far. For example, the best version for the removal of
+    the extra checks was the Fortran 90 version from phase one.
+    For \texttt{-xHOST} the best version of the code was the one
+    compiled without the checks and with \texttt{-O3}.
+  }
+  \label{tab:p2}
+\end{table}
+
+% }}}
+
+\subsection{Third Phase} % {{{
+
+% }}}
+
+\subsection{Fourth Phase} % {{{
+
+% }}}
 
 
 % journey through time
@@ -466,8 +627,6 @@ impact. [WIND]
 
 % make it clear that I could use common sense most of the time,
 % but include vtune results and io time
-
-% checkpoints: 1. flags, 2. rewriting 3. flags again
 
 % }}}
 
