@@ -171,6 +171,7 @@ between the centers of both objects.
 The vector form of the gravitational force object 2 operates on object
 1, which also accounts for the direction of the force, is given by:
 \begin{align}
+  \label{eq:F}
   \vec{F}_{1\leftarrow2} = -F_{1,2}\frac{\vec{p}_1 - \vec{p}_2}
                    {||\vec{p}_1 - \vec{p}_2||_2}
           = -G\frac{m_1 m_2 (\vec{p}_1 - \vec{p}_2)}
@@ -189,6 +190,7 @@ threshold for a collision is $1$.
 Now we can define a pairwise gravitational forces function for the
 particles of the simulation as:
 \begin{align}
+  \label{eq:f}
   f_{1 \leftarrow 2} := \begin{cases}
     \vec{F}_{1 \leftarrow 2} &\text{if }
       ||\vec{p}_1 - \vec{p}_2||_2 \ge \tau_{1,2} \\
@@ -217,7 +219,9 @@ be described as:
 \end{align}
 Based on $\vec{F}_i$ we can now update $\vec{p}_i$ and $\vec{v}_i$:
 \begin{align}
+  \label{eq:p}
   \vec{p}_i &= \vec{p}_i + \Delta_t \vec{v}_i \\
+  \label{eq:v}
   \vec{v}_i &= \vec{v}_i + \Delta_t \frac{\vec{F}_i}{m_i}.
 \end{align}
 The iterations of the program are broken down into supersteps.
@@ -602,7 +606,7 @@ and removing unnecessary checks.
     variation in average overall time from the best version of the
     program so far. For example, the best version for the removal of
     the extra checks was the Fortran 90 version from phase one.
-    For \texttt{-xHOST} the best version of the code was the one
+    For \texttt{-Ofast} the best version of the code was the one
     compiled without the checks and with \texttt{-O3}.
   }
   \label{tab:p2}
@@ -611,6 +615,83 @@ and removing unnecessary checks.
 % }}}
 
 \subsection{Third Phase} % {{{
+
+\begin{algorithm} % {{{
+  \caption{: original computation per time step}
+  \label{alg:old}
+
+  \begin{algorithmic}[1]
+    \FOR{i=1,\dots,n}
+      \STATE{$\vec{F}_i$ := $-vis_i \vec{v}_i$}
+      \COMMENT{Compute viscosity force for particle $i$}
+    \ENDFOR
+
+    \FOR{i=1,\dots,n}
+      \STATE{$\vec{F}_i$ := $\vec{F}_i - vis_i \vec{w}$}
+      \COMMENT{Compute wind force for particle $i$}
+    \ENDFOR
+
+    \FOR{i=1,\dots,n}
+      \STATE{$\vec{r}_i$ := $||\vec{p}_i||_2$}
+      \COMMENT{$\vec{r}$ is used in loop below for the denominator in
+        $\vec{F}_{i \leftarrow central}$}
+    \ENDFOR
+
+    \FOR{i=1,\dots,n}
+      \STATE{$\vec{F}_i$ := $\vec{F}_i +
+        \vec{F}_{i \leftarrow central}$}
+      \COMMENT{see Equation~\ref{eq:F}}
+    \ENDFOR
+    \STATE{Compute pairwise forces with
+      Algorithm~\ref{alg:pairwise_old}}
+
+    \FOR{i=1,\dots,n}
+      \STATE{$\vec{p}_i$ := $\vec{p}_i + \Delta_t \vec{v}_i$}
+      \COMMENT{Update position vector of particle $i$
+        (see Equation~\ref{eq:p})}
+    \ENDFOR
+
+    \FOR{i=1,\dots,n}
+      \STATE{$\vec{v}_i$ := $\vec{v}_i + \Delta_t
+        \vec{F}_i / m_i$}
+      \COMMENT{Update velocity vector of particle $i$
+        (see Equation~\ref{eq:v})}
+    \ENDFOR
+
+  \end{algorithmic}
+\end{algorithm} % }}}
+
+\begin{algorithm} % {{{
+  \caption{: original pairwise forces computation}
+  \label{alg:pairwise_old}
+
+  \begin{algorithmic}[1]
+
+    \FOR{i=1,\dots,n}
+      \FOR{j=i+1,\dots,n}
+        \STATE{$\Delta\vec{p}_{i,j}$ := $\vec{p}_i - \vec{p}_j$}
+      \ENDFOR
+    \ENDFOR
+
+    \FOR{i=1,\dots,n}
+      \FOR{j=i+1,\dots,n}
+        \STATE{$\Delta\vec{p}_{i,j}$ := $||\Delta\vec{p}_{i,j}||_2$}
+        \COMMENT{$\Delta\vec{p}_{i,j}$ is used in loop below for the
+          denominator in $f_{i \leftarrow j}$}
+      \ENDFOR
+    \ENDFOR
+
+    \FOR{i=1,\dots,n}
+      \FOR{j=i+1,\dots,n}
+        \STATE{$\vec{F}_i := \vec{F}_i + f_{i \leftarrow j}$}
+        \COMMENT{see Equation~\ref{eq:f}}
+        \STATE{$\vec{F}_j := \vec{F}_j - f_{i \leftarrow j}$}
+        \COMMENT{see Equation~\ref{eq:f}}
+      \ENDFOR
+    \ENDFOR
+
+  \end{algorithmic}
+\end{algorithm} % }}}
 
 % }}}
 
