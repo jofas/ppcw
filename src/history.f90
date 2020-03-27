@@ -110,7 +110,7 @@ program main
 contains
 
 
-  subroutine evolve()
+  subroutine evolve() ! {{{
     double precision :: force, size
     logical :: collided
     integer :: step, i, j, k, l
@@ -121,20 +121,26 @@ contains
 
       ! set the viscosity term in the force calculation
       do j = 1, Ndim
-        call visc_force(Nbody, f(1,j), vis, velo(1,j))
+        do i = 1, Nbody
+          f(i,j) = -vis(i) * velo(i, j)
+        end do
       end do
 
       ! add the wind term in the force calculation
       do j = 1, Ndim
-        call wind_force(Nbody, f(1,j), vis, wind(j))
+        do i = 1, Nbody
+          f(i,j) = f(i,j) - vis(i) * wind(j)
+        end do
       end do
 
       ! calculate distance from central mass
       do k = 1, Nbody
         r(k) = 0.0
       end do
-      do i = 1, Ndim
-        call add_norm(Nbody, r, pos(1,i))
+      do j = 1, Ndim
+        do i = 1, Nbody
+          r(i) = r(i) + pos(i,j) * pos(i,j)
+        end do
       end do
       do k = 1, Nbody
         r(k) = sqrt(r(k))
@@ -143,8 +149,8 @@ contains
       ! calculate central force
       do i = 1, Nbody
         do l = 1, Ndim
-          f(i,l) = f(i,l) &
-            - calc_force(G * mass(i) * M_central, pos(i,l), r(i))
+          f(i,l) = f(i,l) - G * mass(i) * M_central * pos(i,l) &
+                 / (r(i) ** 3)
         end do
       end do
 
@@ -163,8 +169,10 @@ contains
       do k = 1, Npair
         delta_r(k) = 0.0
       end do
-      do i = 1, Ndim
-        call add_norm(Npair, delta_r, delta_pos(1,i))
+      do j = 1, Ndim
+        do i = 1, Npair
+          delta_r(i) = delta_r(i) + delta_pos(i,j) * delta_pos(i, j)
+        end do
       end do
       do k = 1, Npair
         delta_r(k) = SQRT(delta_r(k))
@@ -180,22 +188,18 @@ contains
 
             !  flip force if close in
             if (delta_r(k) .GE. Size) then
-              f(i,l) = f(i,l) - calc_force( G * mass(i) * mass(j) &
-                                          , delta_pos(k,l) &
-                                          , delta_r(k) )
-              f(j,l) = f(j,l) + calc_force( G * mass(i) * mass(j) &
-                                          , delta_pos(k,l) &
-                                          , delta_r(k) )
+              f(i,l) = f(i,l) - G * mass(i) * mass(j) * delta_pos(k,l) &
+                     / (delta_r(k) ** 3)
+
+              f(j,l) = f(j,l) + G * mass(i) * mass(j) * delta_pos(k,l) &
+                     / (delta_r(k) ** 3)
             else
-              f(i,l) = f(i,l) + calc_force( G * mass(i) * mass(j) &
-                                          , delta_pos(k,l) &
-                                          , delta_r(k) )
-              f(j,l) = f(j,l) - calc_force( G * mass(i) * mass(j) &
-                                          , delta_pos(k,l) &
-                                          , delta_r(k) )
+              f(i,l) = f(i,l) + G * mass(i) * mass(j) * delta_pos(k,l) &
+                     / (delta_r(k) ** 3)
+              f(j,l) = f(j,l) - G * mass(i) * mass(j) * delta_pos(k,l) &
+                     / (delta_r(k) ** 3)
               collided = .true.
             end if
-
           end do
 
           if (collided) then
@@ -220,10 +224,10 @@ contains
       end do
 
     end do
-  end
+  end ! }}}
 
 
-  subroutine read_data(filename)
+  subroutine read_data(filename) ! {{{
     character(len = *), intent(in) :: filename
 
     integer :: i
@@ -238,10 +242,10 @@ contains
       radius(i) = 0.5
     end do
     close(unit=1)
-  end
+  end ! }}}
 
 
-  subroutine write_data(filename)
+  subroutine write_data(filename) ! {{{
     character(len = *), intent(in) :: filename
 
     integer :: i
@@ -253,52 +257,7 @@ contains
         velo(i, Xcoord), velo(i, Ycoord), velo(i, Zcoord)
     end do
     close(unit=1)
-  end
+  end ! }}}
 
 
-  subroutine visc_force(N, f, vis, velo)
-    integer, intent(in) :: N
-    double precision, dimension(N), intent(inout) :: f
-    double precision, dimension(N), intent(in) :: vis, velo
-
-    integer :: i
-
-    do i = 1, N
-      f(i) = -vis(i) * velo(i)
-    end do
-  end
-
-
-  subroutine wind_force(N, f, vis, velo)
-    integer, intent(in) ::  N
-    double precision, dimension(N), intent(inout) :: f
-    double precision, dimension(N), intent(in) :: vis
-    double precision, intent(in) :: velo
-
-    integer :: i
-
-    do i = 1, N
-      f(i) = f(i) - vis(i) * velo
-    end do
-  end
-
-
-  subroutine add_norm(N, r, delta)
-    integer, intent(in) :: N
-    double precision, intent(inout) :: r(N)
-    double precision, intent(in) :: delta(N)
-
-    integer :: i
-
-    do i = 1, N
-      r(i) = r(i) + delta(i) * delta(i)
-    end do
-  end
-
-
-  double precision function calc_force(W, delta, r)
-    double precision, intent(in) :: W, delta, r
-
-    calc_force = W * delta / (r**3)
-  end
 end
