@@ -49,6 +49,8 @@ program main
   integer :: start = 1
   integer :: i
 
+  f(:,:) = 0.0
+
   ! create directory for the output files
   call system("mkdir -p out")
 
@@ -119,40 +121,49 @@ contains
       print *, 'timestep ', step
       print *, 'collisions ', collisions
 
+      ! calculate distance from central mass
+      !do k = 1, Nbody
+      !  r(k) = 0.0
+      !end do
+      !do j = 1, Ndim
+      !  do i = 1, Nbody
+      !    r(i) = r(i) + pos(i,j) * pos(i,j)
+      !  end do
+      !end do
+      !do k = 1, Nbody
+      !  r(k) = sqrt(r(k))
+      !end do
+
+      !do i = 1, Nbody
+      !  f(i,:) = -vis(i) * (velo(i, :) + wind(:)) &
+      !           - G * mass(i) * M_central * pos(i,:) &
+      !           / (sqrt(sum(pos(i,:) ** 2)) ** 3) !(r(i) ** 3)
+      !end do
+
+      !r(:) = sqrt(sum(pos(:,:) ** 2, dim=2))
+
       ! set the viscosity term in the force calculation
-      do j = 1, Ndim
-        do i = 1, Nbody
-          f(i,j) = -vis(i) * velo(i, j)
-        end do
-      end do
+      !do j = 1, Ndim
+      !  do i = 1, Nbody
+      !    f(i,j) = -vis(i) * (velo(i, j) + wind(j)) &
+      !             - G * mass(i) * M_central * pos(i,j) / (r(i) ** 3)
+      !  end do
+      !end do
 
       ! add the wind term in the force calculation
-      do j = 1, Ndim
-        do i = 1, Nbody
-          f(i,j) = f(i,j) - vis(i) * wind(j)
-        end do
-      end do
-
-      ! calculate distance from central mass
-      do k = 1, Nbody
-        r(k) = 0.0
-      end do
-      do j = 1, Ndim
-        do i = 1, Nbody
-          r(i) = r(i) + pos(i,j) * pos(i,j)
-        end do
-      end do
-      do k = 1, Nbody
-        r(k) = sqrt(r(k))
-      end do
+      !do j = 1, Ndim
+      !  do i = 1, Nbody
+      !    f(i,j) = f(i,j) - vis(i) * wind(j)
+      !  end do
+      !end do
 
       ! calculate central force
-      do i = 1, Nbody
-        do l = 1, Ndim
-          f(i,l) = f(i,l) - G * mass(i) * M_central * pos(i,l) &
-                 / (r(i) ** 3)
-        end do
-      end do
+      !do i = 1, Nbody
+      !  do l = 1, Ndim
+      !    f(i,l) = f(i,l) - G * mass(i) * M_central * pos(i,l) &
+      !           / (r(i) ** 3)
+      !  end do
+      !end do
 
       ! calculate pairwise separation of particles
       k = 1
@@ -209,18 +220,16 @@ contains
         end do
       end do
 
-      ! update positions
       do i = 1, Nbody
-        do j = 1, Ndim
-          pos(i,j) = pos(i,j) + dt * velo(i,j)
-        end do
-      end do
+        f(i,:) = f(i,:) - vis(i) * (velo(i, :) + wind(:)) &
+                 - G * mass(i) * M_central * pos(i,:) &
+                 / (sqrt(sum(pos(i,:) ** 2)) ** 3) !(r(i) ** 3)
 
-      ! update velocities
-      do i = 1, Nbody
-        do j = 1, Ndim
-          velo(i,j) = velo(i,j) + dt * (f(i,j) / mass(i))
-        end do
+        pos(i,:) = pos(i,:) + dt * velo(i,:)
+
+        velo(i,:) = velo(i,:) + dt * (f(i,:) / mass(i))
+
+        f(i,:) = 0.0
       end do
 
     end do
