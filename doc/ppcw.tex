@@ -704,7 +704,7 @@ and removing unnecessary checks.
       \FOR{j=i+1,\dots,n}
         \STATE{$\vec{F}_i := \vec{F}_i + f_{i \leftarrow j}$}
         \COMMENT{see Equation~\ref{eq:f}}
-        \STATE{$\vec{F}_j := \vec{F}_j - f_{i \leftarrow j}$}
+        \STATE{$\vec{F}_j := \vec{F}_j + f_{j \leftarrow i}$}
         \COMMENT{see Equation~\ref{eq:f}}
       \ENDFOR
     \ENDFOR
@@ -891,21 +891,82 @@ Only a single loop is needed for computing $\vec{F}_i$ without the
 pairwise forces and updating $\vec{p}_i$ and $\vec{v}_i$.
 Fusing the two loops is invariant concerning the performance.
 
-Next the critical section of the program was optimized.
+Next the critical section of the program---computing the pairwise
+forces $f_{i \leftarrow j}$---was optimized.
+How the original program computes the pairwise forces is shown in
+Algorithm~\ref{alg:pairwise_old}.
+First two minor simplifications of the loop nest computing the
+pairwise forces (Algorithm~\ref{alg:pairwise_old}, lines 11--16)
+were conducted.
+Two particles $i$ and $j$ collide, if $||\vec{p}_i - \vec{p}_j||_2 <
+\tau_{i,j} := radius_i + radius_j$ (see Section~\ref{sec:md}).
+$radius_i$ is never read from the file containing the data for each
+particle.
+Instead $\forall i: radius_i := 1/2$ is set in the routine reading
+the particle data from file.
+This way $\forall i,j: \tau_{i,j} = 1$, so we can remove $radius$ from
+the program (saving another 32 Kb of memory) and replace it with a
+single constant.
+The second minor change concerns an unnecessary branch.
+The program counts particle collisions.
+Whenever $||\vec{p}_i - \vec{p}_j||_2 < 1$ a counter is increased.
+Instead of increasing the counter in the if-statement of
+Equation~\ref{eq:f}, a boolean variable is set to true and another
+if-statement is needed for incrementing the collision counter.
+The second if-statement was replaced with incrementing the collision
+counter directly.
+Again the changes increased readability but the program is 5\% slower
+than the fastest version.
 
-% pairwise forces: 1st removing collided and threshold to constant
+The next change was the first major change of phase three where
+performance was significantly improved.
+Instead of computing $\vec{p}_{i,j}$ and $\Delta p_{i,j}$ in their
+own loops (Algorithm~\ref{alg:pairwise_old}, lines 1--10) for each
+particle and having to save the result in memory for later use in
+computing $f_{i \leftarrow j}$, they were reduced to two temporal
+variables computed in the last loop (Algorithm~\ref{alg:pairwise_old},
+lines 11--16).
+There are $n(n-1)/2$ particle pairs.
+This means removing the two loops results in a reduction of $n(n-1)$
+iterations.
+The original program actually saved $\vec{p}_{i,j}$ and
+$\Delta p_{i,j}$ not in a matrix/array with $n(n-1)/2$ elements but
+in oversized containers with $n^2$ elements.
+This means the array for $\Delta p_{i,j}$ alone takes up 128 Mb
+of memory.
+The matrix which saves $\vec{p}_{i,j}$ takes up 384 Mb of memory.
+The fastest version took on average 62 seconds to complete the whole
+simulation.
+The new version only takes on average 42 seconds to completion, a
+performance improvement of 32\%.
 
-% then dpos, ddpos in inner pairwise loop
+The next two changes tried to reduce the impact of the branch in
+Equation~\ref{eq:f}.
+Computing $f_{i \leftarrow j}$ was changed to a particle-wise
+operation (see above).
+This way the branch was moved up one loop in the nest and the inner
+loop over the dimensions was again unrolled.
+This resulted in a 2\% performance improvement.
+At this point $f_{i \leftarrow j}$ and $f_{j \leftarrow i}$ were
+still both computed, even though
+$f_{j \leftarrow i} = -f_{i \leftarrow j}$.
+Readability is increased by using
+$\vec{F}_j := \vec{F}_j - f_{i \leftarrow j}$ instead of
+$\vec{F}_j := \vec{F}_j + f_{j \leftarrow i}$.
+This change has no effect on the performance.
 
-% then force to array syntax
+Up to this point vectorization was still disabled with the
+\texttt{-no-vec} flag.
+The last part of phase three was to make the code vectorize.
 
-% then temporal variable for saving force and only inverting force in
-% if statement (reduce impact of branch)
+% pseudo code to make describing easier
 
-% here start w. vectorization
-% vectorization with openmp
+% just enable vec (-xCORE-AVX2 and -vec-threshold0)
 
-% inversing array
+% vectorization with openmp and temp variable
+
+% fuse into one n loop
+
 
 % ratio of pairwise <-> not pairwise still the same (VTune)
 
@@ -925,6 +986,8 @@ Next the critical section of the program was optimized.
 \label{sec:dis}
 
 % input specific opt
+
+% inversing array
 
 % }}}
 
