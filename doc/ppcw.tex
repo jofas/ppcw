@@ -351,12 +351,14 @@ All the successively performed optimizations are described.
 Code quality in form of readability, portability and maintainability
 is taken into account during the whole process and the optimizations
 are all looked at from this perspective.
-The optimization process can basically broken down into four phases:
+The optimization process can basically broken down into five phases:
 (\romannumeral 1) rewriting the source code to Fortran 90,
 restructuring the source code without changing the critical section,
 (\romannumeral 2) enabling basic compiler optimizations,
 (\romannumeral 3) rewriting the program for better performance and
-(\romannumeral 4) trying out more advanced compiler optimizations on
+maintainability, (\romannumeral 4) taking hardware and environment
+into account (mainly vectorization and memory access patterns) and
+(\romannumeral 5) trying out more advanced compiler optimizations on
 the rewritten version of the program again.
 
 \subsection{First Phase} % {{{
@@ -477,6 +479,7 @@ impact. [WIND]
 % }}}
 
 \subsection{Second Phase} % {{{
+\label{subsec:p2}
 
 The second phase was about using the more common compiler flags to
 enhance the performance of the Fortran 90 version.
@@ -632,6 +635,7 @@ and removing unnecessary checks.
 % }}}
 
 \subsection{Third Phase} % {{{
+\label{subsec:p3}
 
 \begin{algorithm} % {{{
   \caption{: original computation per time step}
@@ -678,41 +682,6 @@ and removing unnecessary checks.
   \end{algorithmic}
 \end{algorithm} % }}}
 
-\begin{algorithm} % {{{
-  \caption{: original pairwise forces computation}
-  \label{alg:pairwise_old}
-
-  \begin{algorithmic}[1]
-
-    \FOR{i=1,\dots,n}
-      \FOR{j=i+1,\dots,n}
-        \STATE{$\vec{p}_{i,j}$ := $\vec{p}_i - \vec{p}_j$}
-        \COMMENT{$\vec{p}_{i,j}$ is used in loop below and for the
-          numerator in $f_{i \leftarrow j}$}
-      \ENDFOR
-    \ENDFOR
-
-    \FOR{i=1,\dots,n}
-      \FOR{j=i+1,\dots,n}
-        \STATE{$\Delta p_{i,j}$ := $||\vec{p}_{i,j}||_2$}
-        \COMMENT{$\Delta p_{i,j}$ is used in loop below for the
-          denominator in $f_{i \leftarrow j}$}
-      \ENDFOR
-    \ENDFOR
-
-    \FOR{i=1,\dots,n}
-      \FOR{j=i+1,\dots,n}
-        \STATE{$\vec{F}_i := \vec{F}_i + f_{i \leftarrow j}$}
-        \COMMENT{see Equation~\ref{eq:f}}
-        \STATE{$\vec{F}_j := \vec{F}_j + f_{j \leftarrow i}$}
-        \COMMENT{see Equation~\ref{eq:f}}
-      \ENDFOR
-    \ENDFOR
-
-  \end{algorithmic}
-\end{algorithm} % }}}
-
-The third phase was the most crucial phase.
 While the second phase already improved the performance by 94\%,
 the quality of the program is still bad.
 Both in consideration of performance and more importantly
@@ -720,20 +689,6 @@ maintainability.
 Phase three of the optimization efforts therefore tackles this
 problem by rewriting the critical section of the program, which spans
 the computations for updating the particles at each time step.
-
-The third phase has two main goals.
-The first goal is making code more readable, e.g.\
-writing idiomatic Fortran code, array syntax instead of loops,
-removing unnecessary variables and computation and fusing loops by
-hand.
-This rewrite was necessary not only for increasing maintainability,
-but also to make the second goal easier to achieve.
-The second goal was about hardware and environment specific
-optimizations, mainly enabling vectorization.
-As will be shown below, idiomatic and modern Fortran code makes it
-easy for the compiler to auto-vectorize and only a small portion of
-the rewrite was actually about enforcing vectorization where the
-compiler could not auto-vectorize.
 
 The common workflow for optimizing for speed normally consists of
 iterations, where the program is profiled, the bottleneck determined
@@ -808,15 +763,6 @@ the CPU caused by data hazards.
 The data hazards are caused by output dependencies (write after write)
 when computing $\vec{F}_i$ \citep[see e.g.][]{patterson_2014}.
 
-The next step was to beautify the computation of $r$
-(Algorithm~\ref{alg:old}, lines 7--9).
-Figure~\ref{fig:r} shows the original code and the one-liner it
-was transformed to.
-Using Fortran's array syntax makes the code much more readable by
-being more concise and removing ten lines of code.
-Unfortunately, making this change results in another performance
-regression of about 1\%.
-
 \begin{figure} % {{{
   \begin{lstlisting}[language=Fortran]
     ! This is how the old version of the program computes r
@@ -841,6 +787,15 @@ regression of about 1\%.
     old version of the program and the one using array syntax.}
   \label{fig:r}
 \end{figure} % }}}
+
+The next step was to beautify the computation of $r$
+(Algorithm~\ref{alg:old}, lines 7--9).
+Figure~\ref{fig:r} shows the original code and the one-liner it
+was transformed to.
+Using Fortran's array syntax makes the code much more readable by
+being more concise and removing ten lines of code.
+Unfortunately, making this change results in another performance
+regression of about 1\%.
 
 In order to further concise the program, reduce the amount of loops
 and the memory footprint, $r$ was removed from the program completely,
@@ -890,6 +845,40 @@ readability drastically.
 Only a single loop is needed for computing $\vec{F}_i$ without the
 pairwise forces and updating $\vec{p}_i$ and $\vec{v}_i$.
 Fusing the two loops is invariant concerning the performance.
+
+\begin{algorithm} % {{{
+  \caption{: original pairwise forces computation}
+  \label{alg:pairwise_old}
+
+  \begin{algorithmic}[1]
+
+    \FOR{i=1,\dots,n}
+      \FOR{j=i+1,\dots,n}
+        \STATE{$\vec{p}_{i,j}$ := $\vec{p}_i - \vec{p}_j$}
+        \COMMENT{$\vec{p}_{i,j}$ is used in loop below and for the
+          numerator in $f_{i \leftarrow j}$}
+      \ENDFOR
+    \ENDFOR
+
+    \FOR{i=1,\dots,n}
+      \FOR{j=i+1,\dots,n}
+        \STATE{$\Delta p_{i,j}$ := $||\vec{p}_{i,j}||_2$}
+        \COMMENT{$\Delta p_{i,j}$ is used in loop below for the
+          denominator in $f_{i \leftarrow j}$}
+      \ENDFOR
+    \ENDFOR
+
+    \FOR{i=1,\dots,n}
+      \FOR{j=i+1,\dots,n}
+        \STATE{$\vec{F}_i := \vec{F}_i + f_{i \leftarrow j}$}
+        \COMMENT{see Equation~\ref{eq:f}}
+        \STATE{$\vec{F}_j := \vec{F}_j + f_{j \leftarrow i}$}
+        \COMMENT{see Equation~\ref{eq:f}}
+      \ENDFOR
+    \ENDFOR
+
+  \end{algorithmic}
+\end{algorithm} % }}}
 
 Next the critical section of the program---computing the pairwise
 forces $f_{i \leftarrow j}$---was optimized.
@@ -955,26 +944,170 @@ $\vec{F}_j := \vec{F}_j - f_{i \leftarrow j}$ instead of
 $\vec{F}_j := \vec{F}_j + f_{j \leftarrow i}$.
 This change has no effect on the performance.
 
-Up to this point vectorization was still disabled with the
-\texttt{-no-vec} flag.
-The last part of phase three was to make the code vectorize.
-
-% pseudo code to make describing easier
-
-% just enable vec (-xCORE-AVX2 and -vec-threshold0)
-
-% vectorization with openmp and temp variable
-
-% fuse into one n loop
-
-
-% ratio of pairwise <-> not pairwise still the same (VTune)
-
 % }}}
 
 \subsection{Fourth Phase} % {{{
 
-% compiler flags
+\begin{algorithm} % {{{
+  \caption{: computation per time step after phase three}
+  \label{alg:new}
+
+  \begin{algorithmic}[1]
+
+    \FOR{i=1,\dots,n}
+      \FOR{j=i+1,\dots,n}
+        \STATE{$\vec{F}_i := \vec{F}_i + f_{i \leftarrow j}$}
+        \COMMENT{see Equation~\ref{eq:f}}
+        \STATE{$\vec{F}_j := \vec{F}_j - f_{i \leftarrow j}$}
+        \COMMENT{see Equation~\ref{eq:f}}
+      \ENDFOR
+    \ENDFOR
+
+    \FOR{i=1,\dots,n}
+      \STATE{$\vec{F}_i := \vec{F}_i -vis_i(\vec{v}_i + \vec{w})
+        + \vec{F}_{i \leftarrow central}$}
+      \STATE{$\vec{p}_i := \vec{p}_i + \Delta_t \vec{v}_i$}
+      \STATE{$\vec{v}_i := \vec{v}_i + \Delta_t \vec{F}_i/m_i$}
+    \ENDFOR
+
+  \end{algorithmic}
+\end{algorithm} % }}}
+
+The rewrite in phase three was necessary not only for increasing
+maintainability, but also to make the goal of this phase easier to
+achieve.
+This phase concerns itself with hardware and environment specific
+optimizations, mainly enabling vectorization.
+As will be shown below, idiomatic and modern Fortran code makes it
+easy for the compiler to auto-vectorize and only minor efforts were
+needed to enforce vectorization where the compiler could not
+auto-vectorize.
+
+Algorithm~\ref{alg:new} shows how the particles are updated for each
+time step after the optimizations in phase three.
+Up to this point vectorization was still disabled with the
+\texttt{-no-vec} flag.
+The first step of phase four was to enable vectorization.
+The compiler vectorizes the code when the \texttt{-no-vec} flag is
+not passed.
+But in order to guide the compiler to fully utilize vectorization,
+\texttt{-no-vec} was replaced with the \texttt{-xCORE-AVX2} and the
+\texttt{-vec-threshold0} flags.
+\texttt{-xCORE-AVX2} tells the compiler to generate AVX2 instructions
+when possible and optimize the code for this instruction set
+\citep{xcore_avx2}.
+\texttt{-vec-threshold0} tells the compiler to vectorize whenever
+possible \citep{vec_threshold0}.
+
+The second loop (Algorithm~\ref{alg:new}, lines 7--11)
+is automatically vectorized by the compiler.
+The inner loops over the three dimensions of the vectors are unrolled.
+The compiler tries to vectorize the inner most loop in a loop nest.
+It is unable to vectorize the inner loop for computing the pairwise
+forces (ranging over $j=i+1,\dots,n$), because of data dependencies
+(flow and anti dependency for updating $\vec{F}_i$).
+Like stated in Section~\ref{subsec:p3}, the pairwise forces loop takes
+over 99\% of all the runtime of the program.
+Therefore it is not surprising that the vectorized second loop does
+not speed-up the program.
+Without making the pairwise loop vectorize, enabling vectorization is
+not increasing the performance.
+
+The inner loop of computing the pairwise forces was vectorized using
+OpenMP 4.5's simd directive \citep{omp}.
+The outer loop could not be properly vectorized, because of the
+irregularity of the inner loop, it depending on $i$.
+This hindered OpenMP to successfully collapse the inner and outer
+loops.
+In order to cope with the flow and anti dependencies $\vec{F}_i$ was
+removed from the inner loop and replaced with a temporal reduction
+variable $\vec{F}^\prime_i$.
+After the inner loop completed the temporal variable was integrated
+into $\vec{F}_i$ by setting
+$\vec{F}_i := \vec{F}_i + \vec{F}^\prime_i$.
+Using the reduction clause of the simd directive over
+$\vec{F}^\prime_i$, the inner loop was vectorized successfully.
+The average overall runtime of the program was reduced from 41 seconds
+to 37 seconds, an increase in performance of 10\%.
+
+Looking at the performance report revealed that the compiler thinks
+accessing the vectors $\vec{p}_j$ and $\vec{F}_j$ is unaligned.
+Telling the compiler that these are actually aligned accesses with
+the \texttt{!dir\$ vector aligned} statement did not increase the
+performance.
+All other arrays and matrices are automatically aligned.
+
+One major part of the optimization strategy was reducing loops.
+The last step to reduce the amount of loops in the program to the
+minimal amount was to fuse the outer loop of computing the
+pairwise forces (Algorithm~\ref{alg:new}, line 1) with the update loop
+(Algorithm~\ref{alg:new}, line 7).
+This destroys the vectorization of the update loop while reducing the
+amount of iterations performed by the program.
+What actually happened was that the compiler, instead of unrolling the
+dimensional-wise vector operations (Algorithm~\ref{alg:new}, lines
+8--10), it vectorized them.
+Fusing the two loops did not increase the performance.
+Algorithm~\ref{alg:final} shows the structure of the final version of
+the update operation executed for each time step of the simulation.
+
+\begin{algorithm} % {{{
+  \caption{: final computation per time step}
+  \label{alg:final}
+
+  \begin{algorithmic}[1]
+
+    \FOR{i=1,\dots,n}
+
+      \FOR{j=i+1,\dots,n}
+        \STATE{$\vec{F}^\prime_i := \vec{F}^\prime_i
+          + f_{i \leftarrow j}$}
+        \COMMENT{see Equation~\ref{eq:f}}
+        \STATE{$\vec{F}_j := \vec{F}_j - f_{i \leftarrow j}$}
+        \COMMENT{see Equation~\ref{eq:f}}
+      \ENDFOR
+
+      \STATE{$\vec{F}_i := \vec{F}_i + \vec{F}^\prime_i
+        -vis_i(\vec{v}_i + \vec{w}) + \vec{F}_{i \leftarrow central}$}
+      \STATE{$\vec{p}_i := \vec{p}_i + \Delta_t \vec{v}_i$}
+      \STATE{$\vec{v}_i := \vec{v}_i + \Delta_t \vec{F}_i/m_i$}
+    \ENDFOR
+
+  \end{algorithmic}
+\end{algorithm} % }}}
+
+% }}}
+
+\subsection{Fifth Phase} % {{{
+
+The fifth and last phase was again about using the compiler to
+increase the performance.
+To this point the program was compiled with the following flags:
+\texttt{-fpp}, \texttt{-qopenmp}, \texttt{-O3}, \texttt{xCORE-AVX2}
+and \texttt{-vec-threshold0}.
+Only the last three flags are relevant for performance, while the
+first two just enable features used in the program (Fortran
+preprocessor and OpenMP).
+Some more aggressive compiler optimizations were tried to further
+increase the performance.
+
+\begin{table}
+  \begin{tabu}{|X|l|l|l|l|}
+    \hline
+    Optimization &$\emptyset$ overall time
+                 &$\emptyset$ superstep time  &$+/-\%$ &Status \\
+    \hline
+    \texttt{-Ofast} &27s &5s &27\% &Improvement \\
+    \hline
+    \texttt{-qopt-prefetch=5} &85s &17s &79\% &Improvement \\
+    \hline
+    \texttt{-qopt-mem-layout-trans=4} &62s &12s &27\% &Improvement \\
+    \hline
+  \end{tabu}
+  \caption{Compiler flags tried during the fifth phase of
+    optimization (compare Table~\ref{tab:p2}).}
+  \label{tab:p5}
+\end{table}
 
 % ifort19 debacle
 
@@ -984,6 +1117,8 @@ The last part of phase three was to make the code vectorize.
 
 \section{Discussion} % {{{
 \label{sec:dis}
+
+% ratio of pairwise <-> not pairwise still the same (VTune)
 
 % input specific opt
 
