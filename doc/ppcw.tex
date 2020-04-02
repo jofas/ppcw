@@ -87,6 +87,19 @@
 \maketitle
 
 \begin{abstract}
+  This paper documents the serial optimization of a molecular dynamics
+  program written in the Fortran programming language.
+  The original version of the program took 1270 seconds to complete
+  a simulation on the Cirrus supercomputer.
+  The final version took 26 seconds to complete the same simulation.
+  98\% of the runtime could be removed, simply by modernizing the
+  source code and utilizing compiler optimizations.
+  The main result of the optimization process is the fact that
+  idiomatic, modern and easy-to-read Fortran code results not only in
+  a far better performing program, but also in a more maintainable
+  one.
+  Utilizing the compiler properly was the main reason for the
+  increased performance.
 \end{abstract}
 
 \begin{keywords}
@@ -121,6 +134,7 @@ research council, which is hosted and maintained by the EPCC
 The compilers used were Intel's Fortran compiler \texttt{ifort},
 version $18.0.5$ and $19.0.0$ for the linux operating system
 \citep{ifort18, ifort19}.
+
 The conducted optimizations range from choosing the appropriate
 compiler flags over rewriting performance critical sections of the
 program to hardware specific optimizations, like leveraging
@@ -129,14 +143,31 @@ Since raw performance benefits are not all that is important for
 writing well performing and good programs, the maintainability and
 portability of the program are also looked at and discussed.
 
-% TODO: hint on the results
+The original version of the program takes 1270 seconds to complete the
+simulation used for benchmarking.
+The final version takes only 26 seconds to complete the same
+benchmark.
+98\% of the runtime was removed by the optimization efforts described
+in this paper.
+The main result of this paper is the fact that idiomatic, modern and
+easy-to-read Fortran code results in the best performing program,
+mostly by enabling the compiler to optimize efficiently.
+
+Not only is the performance of the program drastically improved,
+maintainability is also highly increased.
+Approximately 20\% of the source code got removed, making it easier
+to follow what the program does.
+Only in one case was code explicitly added to increase performance.
+On all other occasions performance was increased by replacing badly
+readable code with modern Fortran, killing two birds with one stone.
 
 This paper continues in Section~\ref{sec:md} with describing the
 molecular dynamics program in detail.
 Section~\ref{sec:setup} describes Cirrus and how the correctness of
 the program is tested with a regression test suite.
 Also the benchmark suite used for assessing the performance benefits
-of an optimization is outlined.
+of an optimization is outlined, as is the simulation setup used for
+benchmarking.
 Section~\ref{sec:opt} lists, describes and discusses all
 optimizations tested with their performance benefits.
 Afterwards, the results are discussed in Section~\ref{sec:dis}.
