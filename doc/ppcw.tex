@@ -1090,6 +1090,56 @@ first two just enable features used in the program (Fortran
 preprocessor and OpenMP).
 Some more aggressive compiler optimizations were tried to further
 increase the performance.
+Table~\ref{tab:p5} lists the compiler flags tested and their impact on
+the program's performance.
+
+The best version of the program at this point took on average 37
+seconds to complete the simulation.
+\texttt{-Ofast} was tried in phase two.
+It did not increase performance on the unoptimized version of the
+program.
+On the optimized version of the program on the other hand
+\texttt{-Ofast} results in improved performance.
+Ten seconds are cut off of the simulation's overall runtime. That
+is an improvement of 27\%.
+
+\texttt{-Ofast} makes additional performance optimization to the
+floating point model.
+Because they worked so well two additional compiler optimizations for
+floating point speed were tried: \texttt{-fp-speculation=fast} and
+\texttt{-fma}.
+\texttt{-fp-speculation=fast} enables floating point speculation which
+can relax the way floating point operations are carried out
+\citep{fp_speculation}.
+\texttt{-fma} tells the compiler to use vectorized fused multiply-add
+instructions where applicable \citep{fma}.
+Neither enhances the performance of the program.
+
+Next the maximum level of software prefetching was enabled in order to
+increase the cache hit-rate.
+This is done with the \texttt{-qopt-prefetch=5} flag
+\citep{qopt_prefetch}.
+This resulted in a 5\% performance improvement, taking away another
+second of average overall time.
+
+Lastly the compiler was told to optimize the memory structure of the
+program.
+This was done with the \texttt{-qopt-mem-layout-trans=3} and the
+\texttt{-pad} flags \citep{qopt_mem_layout_trans, pad}.
+Neither benefited the program.
+
+Phase five was the last phase of the optimization process.
+Both maintainability and performance of the program were significantly
+improved.
+Approximately 20\% of the source code was removed.
+A test setting which enables regression tests was added.
+The program was successfully vectorized and the memory usage was cut
+down drastically.
+The unoptimized version of the program took on average 1270 seconds
+to finish the simulation described in Section~\ref{sec:setup}.
+The final version took 26 seconds on average.
+98\% of the time the original program took for the simulation was
+successfully removed.
 
 \begin{table}
   \begin{tabu}{|X|l|l|l|l|}
@@ -1099,17 +1149,21 @@ increase the performance.
     \hline
     \texttt{-Ofast} &27s &5s &27\% &Improvement \\
     \hline
-    \texttt{-qopt-prefetch=5} &85s &17s &79\% &Improvement \\
+    \texttt{-fp-speculation=fast} &27s &5s &0\% &Invariant \\
     \hline
-    \texttt{-qopt-mem-layout-trans=4} &62s &12s &27\% &Improvement \\
+    \texttt{-fma} &27s &5s &0\% &Invariant \\
+    \hline
+    \texttt{-qopt-prefetch=5} &26s &5s &5\% &Improvement \\
+    \hline
+    \texttt{-qopt-mem-layout-trans=3} &26s &5s &0\% &Invariant \\
+    \hline
+    \texttt{-pad} &26s &5s &0\% &Invariant \\
     \hline
   \end{tabu}
   \caption{Compiler flags tried during the fifth phase of
     optimization (compare Table~\ref{tab:p2}).}
   \label{tab:p5}
 \end{table}
-
-% ifort19 debacle
 
 % }}}
 
@@ -1118,7 +1172,18 @@ increase the performance.
 \section{Discussion} % {{{
 \label{sec:dis}
 
+% some observations made during the performance optimization:
+
+% idiomatic code -> fast code (enables compiler to do most)
+
+% compiler is the one making the performance increase significantly
+
+% human should only write code to make it easy for the compiler to do
+% its magic
+
 % ratio of pairwise <-> not pairwise still the same (VTune)
+
+% ifort19 debacle
 
 % input specific opt
 
