@@ -132,7 +132,7 @@ UK national supercomputer of the engineering and physical sciences
 research council, which is hosted and maintained by the EPCC
 \citep{cirrus}.
 The compilers used were Intel's Fortran compiler \texttt{ifort},
-version $18.0.5$ and $19.0.0$ for the linux operating system
+version $18.0.5$ and $19.0.0$ for the Linux operating system
 \citep{ifort18, ifort19}.
 
 The conducted optimizations range from choosing the appropriate
@@ -827,6 +827,13 @@ Using Fortran's array syntax makes the code much more readable by
 being more concise and removing ten lines of code.
 Unfortunately, making this change results in another performance
 regression of about 1\%.
+The reason for the performance drop is the fact that \texttt{pos(:,:)}
+copies the content of the \texttt{pos} matrix to a new temporal one.
+\texttt{pos} is the $n \times 3$ double precisision matrix storing the
+particle vectors $\vec{p}_i$.
+It occupies 96 Kb of memory.
+Copying 96 Kb is a costly operation which is why the code is slower
+than before.
 
 In order to further concise the program, reduce the amount of loops
 and the memory footprint, $r$ was removed from the program completely,
@@ -845,7 +852,7 @@ fast memory access when doing particle-wise operations, rather than
 dimensional-wise (outer loop over the three dimensions of the particle
 vectors).
 The current version of the program actually computes $\vec{F}_i$
-dimensional-wise.
+dimensional-wise, utilizing locality.
 $r_i$ can only be computed particle-wise.
 So in order to remove $r$ from the program the loops for computing
 $\vec{F}_i$ were exchanged to being particle-wise (outer loop over the
@@ -1063,10 +1070,10 @@ to 37 seconds, an increase in performance of 10\%.
 
 Looking at the performance report revealed that the compiler thinks
 accessing the vectors $\vec{p}_j$ and $\vec{F}_j$ is unaligned.
-Telling the compiler that these are actually aligned accesses with
-the \texttt{!dir\$ vector aligned} statement did not increase the
-performance.
-All other arrays and matrices are automatically aligned.
+Telling the compiler that these are actually aligned accesses (with a
+stride of $n$) with the \texttt{!dir\$ vector aligned} compiler hint
+did not increase the performance.
+All other array and matrix accesses are automatically aligned.
 
 One major part of the optimization strategy was reducing loops.
 The last step to reduce the amount of loops in the program to the
@@ -1075,12 +1082,36 @@ pairwise forces (Algorithm~\ref{alg:new}, line 1) with the update loop
 (Algorithm~\ref{alg:new}, line 7).
 This destroys the vectorization of the update loop while reducing the
 amount of iterations performed by the program.
-What actually happened was that the compiler, instead of unrolling the
-dimensional-wise vector operations (Algorithm~\ref{alg:new}, lines
-8--10), it vectorized them.
+But instead of unrolling the dimensional-wise vector operations
+(Algorithm~\ref{alg:new}, lines 8--10), they were vectorized by the
+compiler.
 Fusing the two loops did not increase the performance.
 Algorithm~\ref{alg:final} shows the structure of the final version of
 the update operation executed for each time step of the simulation.
+
+At this point all dimensional-wise operations were replaced with
+particle-wise.
+The dimensions of the matrices containing the particle vectors are
+still $n \times 3$, so the dimensions of the particle vectors are
+stored contiguously in memory.
+This means particle-wise operations are strided with a stride of $n$,
+reducing the utilization of the cache (see Section~\ref{subsec:p3}).
+
+The last part of the rewriting process was to increase the cache
+utilization by transposing the matrices containing the particle
+vectors to remove the stride from particle-wise operations.
+Transposing the matrices was done after vectorization was enabled,
+because of possible alignment issues with the transposed version.
+Vectorization works best with an aligned base pointer.
+For Cirrus's Broadwell processor (see Section~\ref{sec:setup}) the
+data is best aligned on 64 byte boundaries \citep{krishnaiyer2015}.
+Intel's Fortran compiler version 18.0.5 used so far automatically
+aligns all statically and dynamically allocated variables and arrays.
+As expected, making particles contiguous in memory reduced the
+performance by 5\%, from 38 seconds to 40 seconds, because accessing
+the particles is not aligned anymore.
+The processor can handle strided loads and stores better than it can
+handle unaligned accesses.
 
 \begin{algorithm} % {{{
   \caption{: final computation per time step}
@@ -1214,11 +1245,9 @@ successfully removed.
 
 % ratio of pairwise <-> not pairwise still the same (VTune)
 
-% ifort19 debacle
+% (ifort19 debacle)
 
 % input specific opt
-
-% inversing array
 
 % }}}
 
