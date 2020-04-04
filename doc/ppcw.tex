@@ -94,7 +94,7 @@
   The final version took 26 seconds to complete the same simulation.
   98\% of the runtime could be removed, simply by modernizing the
   source code and utilizing compiler optimizations.
-  The main result of the optimization process is the fact that
+  The main result of the optimization process is the observation that
   idiomatic, modern and easy-to-read Fortran code results not only in
   a far better performing program, but also in a more maintainable
   one.
@@ -117,7 +117,7 @@ The program reads data from $n$ molecules as its input and iterates
 a predefined amount of steps, which correspond to the progress of time
 in the simulation.
 Each step the data of the molecules (e.g.\ force, position in a three
-dimensional space, velocity) is updated.
+dimensional Euclidean space, velocity) is updated.
 The program counts collisions between molecules and writes the
 data for each molecule of the simulation out after a certain interval
 of iterations.
@@ -131,9 +131,9 @@ The program was optimized for the Cirrus supercomputer, a tier-2
 UK national supercomputer of the engineering and physical sciences
 research council, which is hosted and maintained by the EPCC
 \citep{cirrus}.
-The compilers used were Intel's Fortran compiler \texttt{ifort},
-version $18.0.5$ and $19.0.0$ for the Linux operating system
-\citep{ifort18, ifort19}.
+The compiler used was Intel's Fortran compiler \texttt{ifort},
+version $18.0.5$ for the Linux operating system
+\citep{ifort18}.
 
 The conducted optimizations range from choosing the appropriate
 compiler flags over rewriting performance critical sections of the
@@ -149,17 +149,19 @@ The final version takes only 26 seconds to complete the same
 benchmark.
 98\% of the runtime was removed by the optimization efforts described
 in this paper.
-The main result of this paper is the fact that idiomatic, modern and
-easy-to-read Fortran code results in the best performing program,
-mostly by enabling the compiler to optimize efficiently.
+The main result of this paper is the observation that idiomatic,
+modern and easy-to-read Fortran code results in the best performing
+program, mostly by enabling the compiler to optimize effectively.
 
 Not only is the performance of the program drastically improved,
 maintainability is also highly increased.
 Approximately 20\% of the source code got removed, making it easier
 to follow what the program does.
-Only in one case was code explicitly added to increase performance.
+Only in one case was code explicitly added to increase performance
+(OpenMP's simd directive).
 On all other occasions performance was increased by replacing badly
-readable code with modern Fortran, killing two birds with one stone.
+readable and inefficient code with modern Fortran code, killing two
+birds with one stone.
 
 This paper continues in Section~\ref{sec:md} with describing the
 molecular dynamics program in detail.
