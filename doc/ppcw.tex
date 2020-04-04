@@ -1065,8 +1065,8 @@ into $\vec{F}_i$ by setting
 $\vec{F}_i := \vec{F}_i + \vec{F}^\prime_i$.
 Using the reduction clause of the simd directive over
 $\vec{F}^\prime_i$, the inner loop was vectorized successfully.
-The average overall runtime of the program was reduced from 41 seconds
-to 37 seconds, an increase in performance of 10\%.
+The average overall runtime of the program was reduced from 42 seconds
+to 37 seconds, an increase in performance of 12\%.
 
 Looking at the performance report revealed that the compiler thinks
 accessing the vectors $\vec{p}_j$ and $\vec{F}_j$ is unaligned.
@@ -1097,16 +1097,18 @@ stored contiguously in memory.
 This means particle-wise operations are strided with a stride of $n$,
 reducing the utilization of the cache (see Section~\ref{subsec:p3}).
 
-The last part of the rewriting process was to increase the cache
+The last part of the rewriting process tried to increase the cache
 utilization by transposing the matrices containing the particle
 vectors to remove the stride from particle-wise operations.
-Transposing the matrices was done after vectorization was enabled,
-because of possible alignment issues with the transposed version.
-Vectorization works best with an aligned base pointer.
+Transposing the matrices was done after vectorization was enabled.
+First enabling vectorization was done, because this way possible
+alignment issues with the transposed version are exposed.
+Vectorization works best with aligned base pointers.
 For Cirrus's Broadwell processor (see Section~\ref{sec:setup}) the
 data is best aligned on 64 byte boundaries \citep{krishnaiyer2015}.
-Intel's Fortran compiler version 18.0.5 used so far automatically
-aligns all statically and dynamically allocated variables and arrays.
+A particle vector is only 24 bytes long.
+Accessing every particle except the first is not aligned based on the
+64 byte boundary.
 As expected, making particles contiguous in memory reduced the
 performance by 5\%, from 38 seconds to 40 seconds, because accessing
 the particles is not aligned anymore.
@@ -1141,6 +1143,7 @@ handle unaligned accesses.
 % }}}
 
 \subsection{Fifth Phase} % {{{
+\label{subsec:p5}
 
 The fifth and last phase was again about using the compiler to
 increase the performance.
@@ -1234,25 +1237,93 @@ successfully removed.
 \section{Discussion} % {{{
 \label{sec:dis}
 
-% some observations made during the performance optimization:
+This section will discuss the most remarkable observations made during
+the optimization process.
+Most remarkably is the fact that well readable, idiomatic and modern
+Fortran code that uses high level features like array slicing results
+in a very well performing program which is also easy to maintain.
+The biggest performance gains were made by properly utilizing the
+compiler to make optimizations.
+The biggest performance benefit observed of well written code
+was the fact that it enables the compiler to properly optimize.
 
-% idiomatic code -> fast code (enables compiler to do most)
+Table~\ref{tab:discussion} shows the average overall performance of
+the best version of the program after each optimization phase.
+Clearly the biggest performance gains were made in phase two.
+Phase two enabled compiler optimization in the first place.
+In phases three and four the program was rewritten to be more
+maintainable and faster.
+A lot of memory was saved, as was runtime.
+Compared to the unoptimized version of the program which was used in
+phase two, another performance gain of 40\% was achieved by rewriting
+the program and enabling vectorization.
+But more remarkably are the results of phase five.
+The fifth phase was again about utilizing the compiler to increase
+the performance further.
+\texttt{-Ofast} was tried in phase two.
+It did not increase the performance of the unoptimized version of the
+program (see Section~\ref{subsec:p2}).
+\texttt{-Ofast} on the optimized version on the other hand resulted in
+a performance gain of 27\% (see Section~\ref{subsec:p5}).
+Combining the raw speed gains of the optimized version with the
+speed gains it enabled by allowing the compiler to properly optimize,
+the optimized version gains 58\% on the unoptimized version of the
+program.
+This is a remarkable number and validates the rewriting of the program
+as successful from a performance perspective.
 
-% compiler is the one making the performance increase significantly
+Like stated above, not only is raw performance considered during the
+optimization process, but also maintainability.
+Maintainability is not as easy to measure as is performance.
+The best measurement that can be presented is the fact, that the
+optimized version is 20\% smaller concerning the lines of code than
+is the original program.
+The build process is also much simplified and only a single source
+file is needed to the previous four.
+Again does the optimized version leverage (relatively) modern Fortran
+features like modules over old-fashioned ones like \texttt{COMMON}
+blocks to increase its maintainability (see Section~\ref{subsec:p1}).
 
-% human should only write code to make it easy for the compiler to do
-% its magic
-
-% ratio of pairwise <-> not pairwise still the same (VTune)
-
-% (ifort19 debacle)
-
-% input specific opt
+\begin{table}
+  \begin{tabu}{|X|c|c|c|c|c|c|}
+    \hline
+      &Original &Phase one &Phase two &Phase three &Phase four
+      &Phase five \\
+    \hline
+    $\emptyset$ overall time &1270s &1110s &62s &42s &37s &26s \\
+    \hline
+    $+/-\%$ &- &13\% &94\% &32\% &12\% &30\% \\
+    \hline
+  \end{tabu}
+  \caption{Benchmark results after each optimization phase.}
+  \label{tab:discussion}
+\end{table}
 
 % }}}
 
 \section{Conclusion} % {{{
 \label{sec:con}
+
+The optimization process described in Section~\ref{sec:opt} is
+considered to be successful from both perspectives: performance and
+maintainability.
+The original version of the program took on average 1270 seconds to
+complete the simulation described in Section~\ref{sec:setup}.
+The final version of the program took only 26 seconds to complete the
+same simulation.
+That is a performance gain of 98\%.
+
+These gains were mainly due to the proper utilization of the compiler.
+The most remarkable observation made during the optimization process
+was the fact that idiomatic and modern Fortran code makes it
+easy for the compiler to optimize, while also increasing the
+maintainability of the program.
+
+This paper only considered serial performance.
+The obvious next step to further increase the program's performance
+and enable much bigger simulations would be to parallelize it to
+multiple threads (using e.g.\ OpenMP) or even distribute it to
+multiple nodes (e.g.\ with MPI).
 
 % }}}
 
