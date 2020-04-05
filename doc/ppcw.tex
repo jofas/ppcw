@@ -771,9 +771,10 @@ This was done not in consideration of performance, but to better
 enable the rewriting.
 The utility functions were obscuring loops, making it harder to
 properly see loop nests which are crucial for vectorization.
-Looking at the optimization report revealed, that they were inlined
-by the compiler, so no performance difference was measured after
-the hand inlining.
+Looking at the optimization report revealed that they were inlined
+by the compiler.
+Consequently no performance difference was measured after the hand
+inlining.
 
 Algorithm~\ref{alg:old} shows the update operation per time step,
 as it was originally implemented.
@@ -800,7 +801,7 @@ on average.
 This is a drop in performance of approximately 3\%.
 The reason for this drop are reduced efficiency of the pipelines of
 the CPU caused by data hazards.
-The data hazards are caused by output dependencies (write after write)
+The data hazards are due to output dependencies (write after write)
 when computing $\vec{F}_i$ \citep[see e.g.][]{patterson_2014}.
 
 \begin{figure} % {{{
@@ -837,7 +838,8 @@ being more concise and removing ten lines of code.
 Unfortunately, making this change results in another performance
 regression of about 1\%.
 The reason for the performance drop is the fact that \texttt{pos(:,:)}
-copies the content of the \texttt{pos} matrix to a new temporal one.
+copies the content of the \texttt{pos} matrix to a new temporal one
+(the performance report revealed a memcpy operation).
 \texttt{pos} is the $n \times 3$ double precisision matrix storing the
 particle vectors $\vec{p}_i$.
 It occupies 96 Kb of memory.
@@ -859,7 +861,7 @@ of $n$ and not contiguous in memory.
 This does not leverage locality needed for utilizing the cache for
 fast memory access when doing particle-wise operations, rather than
 dimensional-wise (outer loop over the three dimensions of the particle
-vectors).
+vectors in the Euclidean space of the simulation).
 The current version of the program actually computes $\vec{F}_i$
 dimensional-wise, utilizing locality.
 $r_i$ can only be computed particle-wise.
@@ -953,6 +955,10 @@ The second if-statement was replaced with incrementing the collision
 counter directly.
 Again the changes increased readability but the program is 5\% slower
 than the fastest version.
+A reason for this performance drop could not be determined, but
+arguably the branch structure was the reason for the drop.
+The old version of the program probably allowed the processor to
+better predict the next branch.
 
 The next change was the first major change of phase three where
 performance was significantly improved.
@@ -981,8 +987,9 @@ Equation~\ref{eq:f}.
 Computing $f_{i \leftarrow j}$ was changed to a particle-wise
 operation (see above).
 This way the branch was moved up one loop in the nest and the inner
-loop over the dimensions was again unrolled.
+loop over the dimensions of the Euclidean space was again unrolled.
 This resulted in a 2\% performance improvement.
+
 At this point $f_{i \leftarrow j}$ and $f_{j \leftarrow i}$ were
 still both computed, even though
 $f_{j \leftarrow i} = -f_{i \leftarrow j}$.
