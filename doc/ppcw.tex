@@ -356,8 +356,8 @@ Each superstep encompasses 100 iterations.
 Computation is done using double precision floats.
 The input file which was used for optimizing contained 4096 particles.
 The goal of the optimization process was to reduce the wall-clock
-time of the program to a minimum, while bearing in mind portability
-and more importantly maintainability.
+time of the program to a minimum, while bearing in mind
+the program's maintainability.
 The program measures the time it needs for each superstep and its
 overall time, including the file output.
 In order to build the benchmark suite around the program, the timings
@@ -385,9 +385,9 @@ This section documents the process of the serial performance
 optimization of the program.
 Focus lies more on the process, not the results.
 All the successively performed optimizations are described.
-Code quality in form of readability, portability and maintainability
-is taken into account during the whole process and the optimizations
-are all looked at from this perspective.
+Code quality in form of readability, size of the codebase and
+maintainability is taken into account during the whole process and the
+optimizations are all looked at from this perspective.
 The optimization process can basically broken down into five phases:
 (\romannumeral 1) rewriting the source code to modern, free-formatted
 Fortran and restructuring the source code without changing the
