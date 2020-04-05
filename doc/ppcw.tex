@@ -995,7 +995,8 @@ still both computed, even though
 $f_{j \leftarrow i} = -f_{i \leftarrow j}$.
 Readability is increased by using
 $\vec{F}_j := \vec{F}_j - f_{i \leftarrow j}$ instead of
-$\vec{F}_j := \vec{F}_j + f_{j \leftarrow i}$.
+$\vec{F}_j := \vec{F}_j + f_{j \leftarrow i}$
+(see Algorithm~\ref{alg:pairwise_old}, line 14).
 This change has no effect on the performance.
 
 % }}}
@@ -1028,8 +1029,8 @@ This change has no effect on the performance.
 \end{algorithm} % }}}
 
 The rewrite in phase three was necessary not only for increasing
-maintainability, but also to make the goal of this phase easier to
-achieve.
+maintainability and performance, but also to make the goal of this
+phase easier to achieve.
 This phase concerns itself with hardware and environment specific
 optimizations, mainly enabling vectorization.
 As will be shown below, idiomatic and modern Fortran code makes it
@@ -1042,8 +1043,8 @@ time step after the optimizations in phase three.
 Up to this point vectorization was still disabled with the
 \texttt{-no-vec} flag.
 The first step of phase four was to enable vectorization.
-The compiler vectorizes the code when the \texttt{-no-vec} flag is
-not passed.
+The compiler automatically tries to vectorize the code when the
+\texttt{-no-vec} flag is not passed.
 But in order to guide the compiler to fully utilize vectorization,
 \texttt{-no-vec} was replaced with the \texttt{-xCORE-AVX2} and the
 \texttt{-vec-threshold0} flags.
@@ -1076,9 +1077,9 @@ loops.
 In order to cope with the flow and anti dependencies $\vec{F}_i$ was
 removed from the inner loop and replaced with a temporal reduction
 variable $\vec{F}^\prime_i$.
-After the inner loop completed the temporal variable was integrated
-into $\vec{F}_i$ by setting
-$\vec{F}_i := \vec{F}_i + \vec{F}^\prime_i$.
+The temporal variable was integrated into $\vec{F}_i$ by setting
+$\vec{F}_i := \vec{F}_i + \vec{F}^\prime_i$ after the inner loop
+completes.
 Using the reduction clause of the simd directive over
 $\vec{F}^\prime_i$, the inner loop was vectorized successfully.
 The average overall runtime of the program was reduced from 42 seconds
@@ -1108,8 +1109,8 @@ the update operation executed for each time step of the simulation.
 At this point all dimensional-wise operations were replaced with
 particle-wise.
 The dimensions of the matrices containing the particle vectors are
-still $n \times 3$, so the dimensions of the particle vectors are
-stored contiguously in memory.
+still $n \times 3$, so the dimensions in the Euclidean space of the
+simulation of the particle vectors are stored contiguously in memory.
 This means particle-wise operations are strided with a stride of $n$,
 reducing the utilization of the cache (see Section~\ref{subsec:p3}).
 
@@ -1117,7 +1118,7 @@ The last part of the rewriting process tried to increase the cache
 utilization by transposing the matrices containing the particle
 vectors to remove the stride from particle-wise operations.
 Transposing the matrices was done after vectorization was enabled.
-First enabling vectorization was done, because this way possible
+First vectorization was enabled, because this way possible
 alignment issues with the transposed version are exposed.
 Vectorization works best with aligned base pointers.
 For Cirrus's Broadwell processor (see Section~\ref{sec:setup}) the
@@ -1258,10 +1259,8 @@ the optimization process.
 Most remarkably is the fact that well readable, idiomatic and modern
 Fortran code that uses high level features like array slicing results
 in a very well performing program which is also easy to maintain.
-The biggest performance gains were made by properly utilizing the
-compiler to make optimizations.
-The biggest performance benefit observed of well written code
-was the fact that it enables the compiler to properly optimize.
+A big performance gain of idiomatic code observed was that it
+allowed the compiler to properly optimize.
 
 Table~\ref{tab:discussion} shows the average overall performance of
 the best version of the program after each optimization phase.
@@ -1291,12 +1290,13 @@ as successful from a performance perspective.
 Like stated above, not only is raw performance considered during the
 optimization process, but also maintainability.
 Maintainability is not as easy to measure as is performance.
-The best measurement that can be presented is the fact, that the
+The best measurement that can be presented is, that the
 optimized version is 20\% smaller concerning the lines of code than
-is the original program.
+the original program.
 The build process is also much simplified and only a single source
-file is needed to the previous four.
-Again does the optimized version leverage (relatively) modern Fortran
+file is needed compared to the four files of the unoptimized version
+of the program.
+The optimized version leverages (relatively) modern Fortran
 features like modules over old-fashioned ones like \texttt{COMMON}
 blocks to increase its maintainability (see Section~\ref{subsec:p1}).
 
