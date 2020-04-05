@@ -381,22 +381,22 @@ computational effort of the simulation.
 \section{Optimizations} % {{{
 \label{sec:opt}
 
-This section documents the process of performance optimization of the
-program.
+This section documents the process of the serial performance
+optimization of the program.
 Focus lies more on the process, not the results.
 All the successively performed optimizations are described.
 Code quality in form of readability, portability and maintainability
 is taken into account during the whole process and the optimizations
 are all looked at from this perspective.
 The optimization process can basically broken down into five phases:
-(\romannumeral 1) rewriting the source code to Fortran 90,
-restructuring the source code without changing the critical section,
-(\romannumeral 2) enabling basic compiler optimizations,
-(\romannumeral 3) rewriting the program for better performance and
-maintainability, (\romannumeral 4) taking hardware and environment
-into account (mainly vectorization and memory access patterns) and
-(\romannumeral 5) trying out more advanced compiler optimizations on
-the rewritten version of the program again.
+(\romannumeral 1) rewriting the source code to modern, free-formatted
+Fortran and restructuring the source code without changing the
+critical section, (\romannumeral 2) enabling basic compiler
+optimizations, (\romannumeral 3) rewriting the program for better
+performance and maintainability, (\romannumeral 4) taking hardware and
+environment into account (mainly vectorization and memory access
+patterns) and (\romannumeral 5) trying out more advanced compiler
+optimizations on the rewritten version of the program again.
 
 \subsection{First Phase} % {{{
 \label{subsec:p1}
@@ -452,10 +452,11 @@ Fortran 90 file needs to be compiled, rather than having to link
 \texttt{control.f} and \texttt{MD.f} with \texttt{coord.inc}.
 
 Both, the original version and the new Fortran 90 version were
-modified to incorporate the test setting, where they read there
-intermediate outputs back in in order to compute the next superstep.
-In order for this setting not to interfere with the original setting
-used for benchmarking, Intel's Fortran preprocessor was used
+modified to incorporate the test setting, where they read the
+intermediate outputs back in, in order to compute the next superstep.
+This setting should not interfere with the original setting
+used for benchmarking.
+Intel's Fortran preprocessor was used to implement the test setting
 \citep{fpp}.
 The additional reading back of the intermediate file is put into an
 \texttt{\#ifdef} directive.
@@ -488,12 +489,15 @@ supersteps from the overall time, one gets the time spent doing the
 file output.
 The IO time lies at a quarter of a second for the original version,
 which is $0.02\%$ of the overall runtime.
+IO time is more or less constant (depending on the workload of the
+Lustre file system) so it is omitted in the following evaluation of
+the program due to its insignificance.
 The new Fortran 90 version of the program takes only $1110$ seconds
 on average to complete.
 The average superstep time lies at $222$ seconds.
 While the focus of the first phase of the optimization actually was
 about enhancing maintainability and setting the right foundation for
-the next phases, the performance was already increased by $12.5\%$.
+the next phases, the performance was already increased by $13\%$.
 
 \begin{figure}
 \begin{verbatim}
