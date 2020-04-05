@@ -523,7 +523,7 @@ impact. [WIND]
 \label{subsec:p2}
 
 The second phase was about using the more common compiler flags to
-enhance the performance of the Fortran 90 version.
+enhance the performance of the program from phase one.
 The compiler flags used in phase one not only hinder compiler
 optimizations with \texttt{-O0}, they even make the code perform worse
 by adding the out-of-bounds access and uninitialized variables flags.
@@ -532,14 +532,14 @@ compiler.
 This phase was not about finding a definitive set of flags, but only
 a first step to see how much the compiler can achieve using the
 more common compiler flags for optimization.
-It was more motivated by the still horrible runtime of 1110 seconds,
-which hinders rapid development during the third phase.
+It was more motivated by the still horrible benchmark time of 1110
+seconds, which hinders rapid development during the following phases.
 Table~\ref{tab:p2} shows all the different flags tried and how they
 impacted performance.
 
 The first act was to remove the unnecessary checks for out-of-bounds
 access of arrays and using uninitialized variables.
-The Fortran 90 version of the code is riddled with loops, so removing
+The current version of the code is riddled with loops, so removing
 the checks for each should have quite the impact on performance.
 As it turned out it did.
 Removing the checks improved the average overall time by $33\%$.
@@ -558,23 +558,22 @@ While this description does not fit to the program at all, which
 has only one significant branch (code structure is discussed below)
 and spends most of its time in loops, \texttt{-O1} still increases
 the performance by 44\%.
-Average overall time is reduced from 734 seconds to 413 seconds
-(see Table~\ref{tab:p2}).
+Average overall time is reduced from 734 seconds to 413 seconds.
 
 \texttt{-O2} is the recommended level of compiler optimization.
 It performs basic loop optimizations like interchanging, unrolling or
 scalar replacements.
 Furthermore inlining, intra-file ipo (interprocedural optimization),
 dead code elimination and many more optimizations are enabled
-\citep[see][]{o}.
+\citep{o}.
 Enabling \texttt{-O2} reduced the average overall time down to
 85 seconds, which is 79\% better than the program compiled with
-\texttt{-O1} (see Table~\ref{tab:p2}).
+\texttt{-O1}.
 
 \texttt{-O3} enables more aggressive optimizations concerning loops
 and memory access transformations, additionally to the optimizations
 done using \texttt{-O2}.
-Optimizations include loop fusion and collapsing if statements.
+Optimizations include loop fusion and collapsing if-statements.
 It is the recommended level of optimization for floating point
 operation heavy programs that spend a lot of time in loops
 \citep{o}.
@@ -582,23 +581,23 @@ This exactly describes the molecular dynamics program and
 \texttt{-O3} actually increases the performance further.
 The average overall time was further reduced from 85 seconds down
 to 62 seconds.
-This is an additional 27\% improvement over \texttt{-O2}
-(see Table~\ref{tab:p2}).
+This is an additional 27\% improvement over \texttt{-O2}.
 
 At this point, vectorization was still disabled with the
 \texttt{-no-vec} flag.
 Enabling vectorization on the yet unoptimized Fortran 90 program
-resulted in a regression of the average overall time of 33\%
-(see Table~\ref{tab:p2}).
+from phase one resulted in a regression of the average overall time of
+33\% (see Table~\ref{tab:p2}).
 Like described above, the second phase is only about finding a
 set of compiler optimizations that would enable a more rapid analysis
-of the performance in the crucial third phase.
+of the performance in the following phases dealing with the rewrite of
+the program.
 This is the reason why the drop in performance was not analyzed
 further.
 For the unoptimized Fortran 90 version of the program somehow
 vectorization seems to cancel optimizations from \texttt{-O3}.
 The guess at this point was that the program profits more from
-optimizations from \texttt{-O3} (like loop unrolling) than
+optimizations from \texttt{-O3} (like loop unrolling) than it does
 from being vectorized.
 
 Lastly other common flags for compiler optimization were considered.
