@@ -113,11 +113,11 @@ Fortran
 This paper documents the serial performance optimization conducted for
 a molecular dynamics program written in the Fortran programming
 language.
-The program reads data from $n$ molecules as its input and iterates
-a predefined amount of steps, which correspond to the progress of time
-in the simulation.
-Each step the data of the molecules (e.g.\ force, position in a three
-dimensional Euclidean space, velocity) is updated.
+The program reads data from $n$ molecules or particles as its input
+and iterates a predefined amount of steps, which correspond to the
+progress of time in the simulation.
+Each step properties of the particles (position in a three dimensional
+Euclidean space and velocity) are updated.
 The program counts collisions between molecules and writes the
 data for each molecule of the simulation out after a certain interval
 of iterations.
@@ -139,9 +139,11 @@ The conducted optimizations range from choosing the appropriate
 compiler flags over rewriting performance critical sections of the
 program to hardware specific optimizations, like leveraging
 vectorization and cache optimizations.
-Since raw performance benefits are not all that is important for
-writing well performing and good programs, the maintainability and
-portability of the program are also looked at and discussed.
+Raw performance benefits are not all that is important for
+writing well performing and good programs.
+The maintainability of the program is also a significant factor.
+The performance optimizations are always looked at from
+a perspective of maintainability.
 
 The original version of the program takes 1270 seconds to complete the
 simulation used for benchmarking.
@@ -159,7 +161,7 @@ Approximately 20\% of the source code got removed, making it easier
 to follow what the program does.
 Only in one case was code explicitly added to increase performance
 (OpenMP's simd directive).
-On all other occasions performance was increased by replacing badly
+On most other occasions performance was increased by replacing badly
 readable and inefficient code with modern Fortran code, killing two
 birds with one stone.
 
@@ -187,7 +189,8 @@ In the following, subscripts $1 \leq i \leq n$ refer to a particle
 of the simulation.
 The data for a particle $i$ is its mass $m_i$, the viscosity of
 a fluid $i$ is part of $vis_i$, the position of the particle's center
-in a three dimensional space $\vec{p}_i$ and its velocity $\vec{v}_i$.
+in a three dimensional Euclidean space $\vec{p}_i$ and its velocity
+vector $\vec{v}_i$.
 
 The program iterates a predefined amount of iterations.
 Each iteration represents a time step in the particle simulation.
@@ -208,46 +211,47 @@ It states, that any two physical objects attract each other
 with a force, which is proportional to the mass of both objects and
 inversely proportional to the squared distance between both
 \citep{feynman1963}.
-The scalar gravitational force $F$ between two objects 1 and 2 can be
-mathematically described as:
+The scalar gravitational force $F$ between two objects $i$ and $j$ can
+be mathematically described as:
 \begin{align}
-  F_{1,2} = G\frac{m_1 m_2}{||\vec{p}_1 - \vec{p}_2||_2^2},
+  F_{i,j} = G\frac{m_i m_j}{||\vec{p}_i - \vec{p}_j||_2^2},
 \end{align}
 where $G$ is the gravitational constant, $m_i$ the mass of object $i$
-and $||\vec{p}_1 - \vec{p}_2||_2$ the Euclidean or $L_2$ distance
+and $||\vec{p}_i - \vec{p}_j||_2$ the Euclidean or $L_2$ distance
 between the centers of both objects.
-The vector form of the gravitational force object 2 operates on object
-1, which also accounts for the direction of the force, is given by:
+The vector form of the gravitational force object $j$ operates on
+object $i$, which also accounts for the direction of the force,
+is given by:
 \begin{align}
   \label{eq:F}
-  \vec{F}_{1\leftarrow2} = -F_{1,2}\frac{\vec{p}_1 - \vec{p}_2}
-                   {||\vec{p}_1 - \vec{p}_2||_2}
-          = -G\frac{m_1 m_2 (\vec{p}_1 - \vec{p}_2)}
-                   {||\vec{p}_1 - \vec{p}_2||_2^3}.
+  \vec{F}_{i\leftarrow j} = -F_{i,j}\frac{\vec{p}_i - \vec{p}_j}
+                   {||\vec{p}_i - \vec{p}_j||_2}
+          = -G\frac{m_i m_j (\vec{p}_i - \vec{p}_j)}
+                   {||\vec{p}_i - \vec{p}_j||_2^3}.
 \end{align}
-The gravitational force, which object 1 operates on object 2 is the
-additive inverse of $\vec{F}_{1 \leftarrow 2}$:
-$\vec{F}_{2 \leftarrow 1} = -\vec{F}_{1 \leftarrow 2}$.
+The gravitational force, which object $i$ operates on object $j$ is
+the additive inverse of $\vec{F}_{i \leftarrow j}$:
+$\vec{F}_{j \leftarrow i} = -\vec{F}_{i \leftarrow j}$.
 If particles collide, the gravitational forces between the two object
-are negated.
-The program finds collisions, by checking if the distance of two
-particles is smaller than a threshold $\tau_{1,2}$, which is the sum
+are negated (the forces are flipped).
+The program finds collisions by checking if the distance of two
+particles is smaller than a threshold $\tau_{i,j}$, which is the sum
 of the radii of the two particles.
-For the program, all particles have a radius of $\frac{1}{2}$, so the
-threshold for a collision is $1$.
-Now we can define a pairwise gravitational forces function for the
-particles of the simulation as:
+In the simulation used for benchmarking all particles have a radius of
+$1/2$, so the threshold for a collision is $1$.
+We can define a pairwise gravitational forces function that takes the
+force flipping into account for the particles of the simulation as:
 \begin{align}
   \label{eq:f}
-  f_{1 \leftarrow 2} := \begin{cases}
-    \vec{F}_{1 \leftarrow 2} &\text{if }
-      ||\vec{p}_1 - \vec{p}_2||_2 \ge \tau_{1,2} \\
-    -\vec{F}_{1 \leftarrow 2} &\text{otherwise}
+  f_{i \leftarrow j} := \begin{cases}
+    \vec{F}_{i \leftarrow j} &\text{if }
+      ||\vec{p}_i - \vec{p}_j||_2 \ge \tau_{i,j} \\
+    -\vec{F}_{i \leftarrow j} &\text{otherwise}
   \end{cases}.
 \end{align}
 Other than the pairwise gravitational forces between the particles,
 there is the gravitational force of the central mass
-$\vec{F}_{1 \leftarrow central}$.
+$\vec{F}_{i \leftarrow central}$.
 The central mass lies at the origin of the three dimensional space,
 which means its position vector $\vec{p}_{central} = 0$.
 
@@ -255,7 +259,7 @@ The viscosity of the fluid is another force operating on a particle.
 It is simply the negative of the viscosity of the fluid multiplied
 by the velocity vector of particle $i: -vis_i \vec{v}_i$.
 Shear velocity of the fluid is not taken into account.
-Lastly, there is the wind force, which is simply the negated viscosity
+Lastly there is the wind force, which is simply the negated viscosity
 of the fluid particle $i$ is part of multiplied by the wind vector:
 $-vis_i \vec{w}$.
 The overall force per iteration operating on particle $i$ can now
@@ -273,6 +277,7 @@ Based on $\vec{F}_i$ we can now update $\vec{p}_i$ and $\vec{v}_i$:
   \label{eq:v}
   \vec{v}_i &= \vec{v}_i + \Delta_t \frac{\vec{F}_i}{m_i}.
 \end{align}
+
 The iterations of the program are broken down into supersteps.
 On completion of a superstep, the updated particles are exported to a
 file with the same format as the input file.
@@ -313,15 +318,14 @@ it seems at first glance.
 Like stated in Section~\ref{sec:md}, after each superstep, the
 updated particles are written out to file.
 Comparing the output of the optimized version of the program with the
-original one would be a sufficient test for correctness, if it were
+original one would be a sufficient test for correctness if it were
 not for floating point rounding errors.
-These accumulate and after a certain amount of time, the numbers
+These accumulate and after a certain amount of time the numbers
 generated by the optimized version will be too different from the
 original ones.
 
-In order to avoid getting different results, just because of floating
-point rounding errors, the program was augmented by a special test
-setting.
+The program was augmented by a special test setting in order to avoid
+getting different results just because of floating point errors.
 This test setting differs from the normal program, because it reads
 the data it has written out after a superstep back in.
 That way, the next superstep will work with the floating point numbers
