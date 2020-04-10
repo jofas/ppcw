@@ -260,7 +260,7 @@ It is simply the negative of the viscosity of the fluid multiplied
 by the velocity vector of particle $i: -vis_i \vec{v}_i$.
 Shear velocity of the fluid is not taken into account.
 Lastly there is the wind force, which is simply the negated viscosity
-of the fluid particle $i$ is part of multiplied by the wind vector:
+of the fluid particle $i$ is part of, multiplied by the wind vector:
 $-vis_i \vec{w}$.
 The overall force per iteration operating on particle $i$ can now
 be described as:
@@ -387,8 +387,8 @@ Focus lies more on the process, not the results.
 All the successively performed optimizations are described.
 Code quality in form of readability, size of the codebase and
 maintainability is taken into account during the whole process and the
-optimizations are all looked at from this perspective.
-The optimization process can basically broken down into five phases:
+optimizations are all looked at from these perspectives.
+The optimization process can be broken down into five phases:
 (\romannumeral 1) rewriting the source code to modern, free-formatted
 Fortran and restructuring the source code without changing the
 critical section, (\romannumeral 2) enabling basic compiler
