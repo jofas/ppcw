@@ -87,6 +87,19 @@
 \maketitle
 
 \begin{abstract}
+  This paper documents the serial optimization of a molecular dynamics
+  program written in the Fortran programming language.
+  The original version of the program took 1270 seconds to complete
+  a simulation on the Cirrus supercomputer.
+  The final version took 26 seconds to complete the same simulation.
+  98\% of the runtime could be removed, simply by modernizing the
+  source code and utilizing compiler optimizations.
+  The main result of the optimization process is the observation that
+  idiomatic, modern and easy-to-read Fortran code results not only in
+  a far better performing program, but also in a more maintainable
+  one.
+  Utilizing the compiler properly was the main reason for the
+  increased performance.
 \end{abstract}
 
 \begin{keywords}
@@ -100,11 +113,11 @@ Fortran
 This paper documents the serial performance optimization conducted for
 a molecular dynamics program written in the Fortran programming
 language.
-The program reads data from $n$ molecules as its input and iterates
-a predefined amount of steps, which correspond to the progress of time
-in the simulation.
-Each step the data of the molecules (e.g.\ force, position in a three
-dimensional space, velocity) is updated.
+The program reads data from $n$ molecules or particles as its input
+and iterates a predefined amount of steps, which correspond to the
+progress of time in the simulation.
+Each step properties of the particles (position in a three dimensional
+Euclidean space and velocity) are updated.
 The program counts collisions between molecules and writes the
 data for each molecule of the simulation out after a certain interval
 of iterations.
@@ -118,25 +131,47 @@ The program was optimized for the Cirrus supercomputer, a tier-2
 UK national supercomputer of the engineering and physical sciences
 research council, which is hosted and maintained by the EPCC
 \citep{cirrus}.
-The compilers used were Intel's Fortran compiler \texttt{ifort},
-version $18.0.5$ and $19.0.0$ for the linux operating system
-\citep{ifort18, ifort19}.
+The compiler used was Intel's Fortran compiler \texttt{ifort},
+version $18.0.5$ for the Linux operating system
+\citep{ifort18}.
+
 The conducted optimizations range from choosing the appropriate
 compiler flags over rewriting performance critical sections of the
 program to hardware specific optimizations, like leveraging
 vectorization and cache optimizations.
-Since raw performance benefits are not all that is important for
-writing well performing and good programs, the maintainability and
-portability of the program are also looked at and discussed.
+Raw performance benefits are not all that is important for
+writing well performing and good programs.
+The maintainability of the program is also a significant factor.
+The performance optimizations are always looked at from
+a perspective of maintainability.
 
-% TODO: hint on the results
+The original version of the program takes 1270 seconds to complete the
+simulation used for benchmarking.
+The final version takes only 26 seconds to complete the same
+benchmark.
+98\% of the runtime was removed by the optimization efforts described
+in this paper.
+The main result of this paper is the observation that idiomatic,
+modern and easy-to-read Fortran code results in the best performing
+program, mostly by enabling the compiler to optimize effectively.
+
+Not only is the performance of the program drastically improved,
+maintainability is also highly increased.
+Approximately 20\% of the source code got removed, making it easier
+to follow what the program does.
+Only in one case was code explicitly added to increase performance
+(OpenMP's simd directive).
+On most other occasions performance was increased by replacing badly
+readable and inefficient code with modern Fortran code, killing two
+birds with one stone.
 
 This paper continues in Section~\ref{sec:md} with describing the
 molecular dynamics program in detail.
 Section~\ref{sec:setup} describes Cirrus and how the correctness of
 the program is tested with a regression test suite.
 Also the benchmark suite used for assessing the performance benefits
-of an optimization is outlined.
+of an optimization is outlined, as is the simulation setup used for
+benchmarking.
 Section~\ref{sec:opt} lists, describes and discusses all
 optimizations tested with their performance benefits.
 Afterwards, the results are discussed in Section~\ref{sec:dis}.
@@ -154,7 +189,8 @@ In the following, subscripts $1 \leq i \leq n$ refer to a particle
 of the simulation.
 The data for a particle $i$ is its mass $m_i$, the viscosity of
 a fluid $i$ is part of $vis_i$, the position of the particle's center
-in a three dimensional space $\vec{p}_i$ and its velocity $\vec{v}_i$.
+in a three dimensional Euclidean space $\vec{p}_i$ and its velocity
+vector $\vec{v}_i$.
 
 The program iterates a predefined amount of iterations.
 Each iteration represents a time step in the particle simulation.
@@ -175,46 +211,47 @@ It states, that any two physical objects attract each other
 with a force, which is proportional to the mass of both objects and
 inversely proportional to the squared distance between both
 \citep{feynman1963}.
-The scalar gravitational force $F$ between two objects 1 and 2 can be
-mathematically described as:
+The scalar gravitational force $F$ between two objects $i$ and $j$ can
+be mathematically described as:
 \begin{align}
-  F_{1,2} = G\frac{m_1 m_2}{||\vec{p}_1 - \vec{p}_2||_2^2},
+  F_{i,j} = G\frac{m_i m_j}{||\vec{p}_i - \vec{p}_j||_2^2},
 \end{align}
 where $G$ is the gravitational constant, $m_i$ the mass of object $i$
-and $||\vec{p}_1 - \vec{p}_2||_2$ the Euclidean or $L_2$ distance
+and $||\vec{p}_i - \vec{p}_j||_2$ the Euclidean or $L_2$ distance
 between the centers of both objects.
-The vector form of the gravitational force object 2 operates on object
-1, which also accounts for the direction of the force, is given by:
+The vector form of the gravitational force object $j$ operates on
+object $i$, which also accounts for the direction of the force,
+is given by:
 \begin{align}
   \label{eq:F}
-  \vec{F}_{1\leftarrow2} = -F_{1,2}\frac{\vec{p}_1 - \vec{p}_2}
-                   {||\vec{p}_1 - \vec{p}_2||_2}
-          = -G\frac{m_1 m_2 (\vec{p}_1 - \vec{p}_2)}
-                   {||\vec{p}_1 - \vec{p}_2||_2^3}.
+  \vec{F}_{i\leftarrow j} = -F_{i,j}\frac{\vec{p}_i - \vec{p}_j}
+                   {||\vec{p}_i - \vec{p}_j||_2}
+          = -G\frac{m_i m_j (\vec{p}_i - \vec{p}_j)}
+                   {||\vec{p}_i - \vec{p}_j||_2^3}.
 \end{align}
-The gravitational force, which object 1 operates on object 2 is the
-additive inverse of $\vec{F}_{1 \leftarrow 2}$:
-$\vec{F}_{2 \leftarrow 1} = -\vec{F}_{1 \leftarrow 2}$.
+The gravitational force, which object $i$ operates on object $j$ is
+the additive inverse of $\vec{F}_{i \leftarrow j}$:
+$\vec{F}_{j \leftarrow i} = -\vec{F}_{i \leftarrow j}$.
 If particles collide, the gravitational forces between the two object
-are negated.
-The program finds collisions, by checking if the distance of two
-particles is smaller than a threshold $\tau_{1,2}$, which is the sum
+are negated (the forces are flipped).
+The program finds collisions by checking if the distance of two
+particles is smaller than a threshold $\tau_{i,j}$, which is the sum
 of the radii of the two particles.
-For the program, all particles have a radius of $\frac{1}{2}$, so the
-threshold for a collision is $1$.
-Now we can define a pairwise gravitational forces function for the
-particles of the simulation as:
+In the simulation used for benchmarking all particles have a radius of
+$1/2$, so the threshold for a collision is $1$.
+We can define a pairwise gravitational forces function that takes the
+force flipping into account for the particles of the simulation as:
 \begin{align}
   \label{eq:f}
-  f_{1 \leftarrow 2} := \begin{cases}
-    \vec{F}_{1 \leftarrow 2} &\text{if }
-      ||\vec{p}_1 - \vec{p}_2||_2 \ge \tau_{1,2} \\
-    -\vec{F}_{1 \leftarrow 2} &\text{otherwise}
+  f_{i \leftarrow j} := \begin{cases}
+    \vec{F}_{i \leftarrow j} &\text{if }
+      ||\vec{p}_i - \vec{p}_j||_2 \ge \tau_{i,j} \\
+    -\vec{F}_{i \leftarrow j} &\text{otherwise}
   \end{cases}.
 \end{align}
 Other than the pairwise gravitational forces between the particles,
 there is the gravitational force of the central mass
-$\vec{F}_{1 \leftarrow central}$.
+$\vec{F}_{i \leftarrow central}$.
 The central mass lies at the origin of the three dimensional space,
 which means its position vector $\vec{p}_{central} = 0$.
 
@@ -222,7 +259,7 @@ The viscosity of the fluid is another force operating on a particle.
 It is simply the negative of the viscosity of the fluid multiplied
 by the velocity vector of particle $i: -vis_i \vec{v}_i$.
 Shear velocity of the fluid is not taken into account.
-Lastly, there is the wind force, which is simply the negated viscosity
+Lastly there is the wind force, which is simply the negated viscosity
 of the fluid particle $i$ is part of multiplied by the wind vector:
 $-vis_i \vec{w}$.
 The overall force per iteration operating on particle $i$ can now
@@ -240,6 +277,7 @@ Based on $\vec{F}_i$ we can now update $\vec{p}_i$ and $\vec{v}_i$:
   \label{eq:v}
   \vec{v}_i &= \vec{v}_i + \Delta_t \frac{\vec{F}_i}{m_i}.
 \end{align}
+
 The iterations of the program are broken down into supersteps.
 On completion of a superstep, the updated particles are exported to a
 file with the same format as the input file.
@@ -280,15 +318,14 @@ it seems at first glance.
 Like stated in Section~\ref{sec:md}, after each superstep, the
 updated particles are written out to file.
 Comparing the output of the optimized version of the program with the
-original one would be a sufficient test for correctness, if it were
+original one would be a sufficient test for correctness if it were
 not for floating point rounding errors.
-These accumulate and after a certain amount of time, the numbers
+These accumulate and after a certain amount of time the numbers
 generated by the optimized version will be too different from the
 original ones.
 
-In order to avoid getting different results, just because of floating
-point rounding errors, the program was augmented by a special test
-setting.
+The program was augmented by a special test setting in order to avoid
+getting different results just because of floating point errors.
 This test setting differs from the normal program, because it reads
 the data it has written out after a superstep back in.
 That way, the next superstep will work with the floating point numbers
@@ -319,8 +356,8 @@ Each superstep encompasses 100 iterations.
 Computation is done using double precision floats.
 The input file which was used for optimizing contained 4096 particles.
 The goal of the optimization process was to reduce the wall-clock
-time of the program to a minimum, while bearing in mind portability
-and more importantly maintainability.
+time of the program to a minimum, while bearing in mind
+the program's maintainability.
 The program measures the time it needs for each superstep and its
 overall time, including the file output.
 In order to build the benchmark suite around the program, the timings
@@ -344,20 +381,22 @@ computational effort of the simulation.
 \section{Optimizations} % {{{
 \label{sec:opt}
 
-This section documents the process of performance optimization of the
-program.
+This section documents the process of the serial performance
+optimization of the program.
 Focus lies more on the process, not the results.
 All the successively performed optimizations are described.
-Code quality in form of readability, portability and maintainability
-is taken into account during the whole process and the optimizations
-are all looked at from this perspective.
-The optimization process can basically broken down into four phases:
-(\romannumeral 1) rewriting the source code to Fortran 90,
-restructuring the source code without changing the critical section,
-(\romannumeral 2) enabling basic compiler optimizations,
-(\romannumeral 3) rewriting the program for better performance and
-(\romannumeral 4) trying out more advanced compiler optimizations on
-the rewritten version of the program again.
+Code quality in form of readability, size of the codebase and
+maintainability is taken into account during the whole process and the
+optimizations are all looked at from this perspective.
+The optimization process can basically broken down into five phases:
+(\romannumeral 1) rewriting the source code to modern, free-formatted
+Fortran and restructuring the source code without changing the
+critical section, (\romannumeral 2) enabling basic compiler
+optimizations, (\romannumeral 3) rewriting the program for better
+performance and maintainability, (\romannumeral 4) taking hardware and
+environment into account (mainly vectorization and memory access
+patterns) and (\romannumeral 5) trying out more advanced compiler
+optimizations on the rewritten version of the program again.
 
 \subsection{First Phase} % {{{
 \label{subsec:p1}
@@ -413,10 +452,11 @@ Fortran 90 file needs to be compiled, rather than having to link
 \texttt{control.f} and \texttt{MD.f} with \texttt{coord.inc}.
 
 Both, the original version and the new Fortran 90 version were
-modified to incorporate the test setting, where they read there
-intermediate outputs back in in order to compute the next superstep.
-In order for this setting not to interfere with the original setting
-used for benchmarking, Intel's Fortran preprocessor was used
+modified to incorporate the test setting, where they read the
+intermediate outputs back in, in order to compute the next superstep.
+This setting should not interfere with the original setting
+used for benchmarking.
+Intel's Fortran preprocessor was used to implement the test setting
 \citep{fpp}.
 The additional reading back of the intermediate file is put into an
 \texttt{\#ifdef} directive.
@@ -449,12 +489,15 @@ supersteps from the overall time, one gets the time spent doing the
 file output.
 The IO time lies at a quarter of a second for the original version,
 which is $0.02\%$ of the overall runtime.
+IO time is more or less constant (depending on the workload of the
+Lustre file system) so it is omitted in the following evaluation of
+the program due to its insignificance.
 The new Fortran 90 version of the program takes only $1110$ seconds
 on average to complete.
 The average superstep time lies at $222$ seconds.
 While the focus of the first phase of the optimization actually was
 about enhancing maintainability and setting the right foundation for
-the next phases, the performance was already increased by $12.5\%$.
+the next phases, the performance was already increased by $13\%$.
 
 \begin{figure}
 \begin{verbatim}
@@ -477,9 +520,10 @@ impact. [WIND]
 % }}}
 
 \subsection{Second Phase} % {{{
+\label{subsec:p2}
 
 The second phase was about using the more common compiler flags to
-enhance the performance of the Fortran 90 version.
+enhance the performance of the program from phase one.
 The compiler flags used in phase one not only hinder compiler
 optimizations with \texttt{-O0}, they even make the code perform worse
 by adding the out-of-bounds access and uninitialized variables flags.
@@ -488,14 +532,14 @@ compiler.
 This phase was not about finding a definitive set of flags, but only
 a first step to see how much the compiler can achieve using the
 more common compiler flags for optimization.
-It was more motivated by the still horrible runtime of 1110 seconds,
-which hinders rapid development during the third phase.
+It was more motivated by the still horrible benchmark time of 1110
+seconds, which hinders rapid development during the following phases.
 Table~\ref{tab:p2} shows all the different flags tried and how they
 impacted performance.
 
 The first act was to remove the unnecessary checks for out-of-bounds
 access of arrays and using uninitialized variables.
-The Fortran 90 version of the code is riddled with loops, so removing
+The current version of the code is riddled with loops, so removing
 the checks for each should have quite the impact on performance.
 As it turned out it did.
 Removing the checks improved the average overall time by $33\%$.
@@ -514,23 +558,22 @@ While this description does not fit to the program at all, which
 has only one significant branch (code structure is discussed below)
 and spends most of its time in loops, \texttt{-O1} still increases
 the performance by 44\%.
-Average overall time is reduced from 734 seconds to 413 seconds
-(see Table~\ref{tab:p2}).
+Average overall time is reduced from 734 seconds to 413 seconds.
 
 \texttt{-O2} is the recommended level of compiler optimization.
 It performs basic loop optimizations like interchanging, unrolling or
 scalar replacements.
 Furthermore inlining, intra-file ipo (interprocedural optimization),
 dead code elimination and many more optimizations are enabled
-\citep[see][]{o}.
+\citep{o}.
 Enabling \texttt{-O2} reduced the average overall time down to
 85 seconds, which is 79\% better than the program compiled with
-\texttt{-O1} (see Table~\ref{tab:p2}).
+\texttt{-O1}.
 
 \texttt{-O3} enables more aggressive optimizations concerning loops
 and memory access transformations, additionally to the optimizations
 done using \texttt{-O2}.
-Optimizations include loop fusion and collapsing if statements.
+Optimizations include loop fusion and collapsing if-statements.
 It is the recommended level of optimization for floating point
 operation heavy programs that spend a lot of time in loops
 \citep{o}.
@@ -538,23 +581,23 @@ This exactly describes the molecular dynamics program and
 \texttt{-O3} actually increases the performance further.
 The average overall time was further reduced from 85 seconds down
 to 62 seconds.
-This is an additional 27\% improvement over \texttt{-O2}
-(see Table~\ref{tab:p2}).
+This is an additional 27\% improvement over \texttt{-O2}.
 
 At this point, vectorization was still disabled with the
 \texttt{-no-vec} flag.
 Enabling vectorization on the yet unoptimized Fortran 90 program
-resulted in a regression of the average overall time of 33\%
-(see Table~\ref{tab:p2}).
+from phase one resulted in a regression of the average overall time of
+33\% (see Table~\ref{tab:p2}).
 Like described above, the second phase is only about finding a
 set of compiler optimizations that would enable a more rapid analysis
-of the performance in the crucial third phase.
+of the performance in the following phases dealing with the rewrite of
+the program.
 This is the reason why the drop in performance was not analyzed
 further.
 For the unoptimized Fortran 90 version of the program somehow
 vectorization seems to cancel optimizations from \texttt{-O3}.
 The guess at this point was that the program profits more from
-optimizations from \texttt{-O3} (like loop unrolling) than
+optimizations from \texttt{-O3} (like loop unrolling) than it does
 from being vectorized.
 
 Lastly other common flags for compiler optimization were considered.
@@ -632,6 +675,7 @@ and removing unnecessary checks.
 % }}}
 
 \subsection{Third Phase} % {{{
+\label{subsec:p3}
 
 \begin{algorithm} % {{{
   \caption{: original computation per time step}
@@ -678,39 +722,6 @@ and removing unnecessary checks.
   \end{algorithmic}
 \end{algorithm} % }}}
 
-\begin{algorithm} % {{{
-  \caption{: original pairwise forces computation}
-  \label{alg:pairwise_old}
-
-  \begin{algorithmic}[1]
-
-    \FOR{i=1,\dots,n}
-      \FOR{j=i+1,\dots,n}
-        \STATE{$\Delta\vec{p}_{i,j}$ := $\vec{p}_i - \vec{p}_j$}
-      \ENDFOR
-    \ENDFOR
-
-    \FOR{i=1,\dots,n}
-      \FOR{j=i+1,\dots,n}
-        \STATE{$\Delta\vec{p}_{i,j}$ := $||\Delta\vec{p}_{i,j}||_2$}
-        \COMMENT{$\Delta\vec{p}_{i,j}$ is used in loop below for the
-          denominator in $f_{i \leftarrow j}$}
-      \ENDFOR
-    \ENDFOR
-
-    \FOR{i=1,\dots,n}
-      \FOR{j=i+1,\dots,n}
-        \STATE{$\vec{F}_i := \vec{F}_i + f_{i \leftarrow j}$}
-        \COMMENT{see Equation~\ref{eq:f}}
-        \STATE{$\vec{F}_j := \vec{F}_j - f_{i \leftarrow j}$}
-        \COMMENT{see Equation~\ref{eq:f}}
-      \ENDFOR
-    \ENDFOR
-
-  \end{algorithmic}
-\end{algorithm} % }}}
-
-The third phase was the most crucial phase.
 While the second phase already improved the performance by 94\%,
 the quality of the program is still bad.
 Both in consideration of performance and more importantly
@@ -719,34 +730,40 @@ Phase three of the optimization efforts therefore tackles this
 problem by rewriting the critical section of the program, which spans
 the computations for updating the particles at each time step.
 
-The third phase has two main goals.
-The first goal is making code more readable, e.g.\
-writing idiomatic Fortran code, array syntax instead of loops,
-removing unnecessary variables and computation and fusing loops by
-hand.
-This rewrite was necessary not only for increasing maintainability,
-but also to make the second goal easier to achieve.
-The second goal was about hardware and environment specific
-optimizations, mainly enabling vectorization.
-As will be shown below, idiomatic and modern Fortran code makes it
-easy for the compiler to auto-vectorize and only a small portion of
-the rewrite was actually about enforcing vectorization, where the
-compiler could not auto-vectorize.
-
 The common workflow for optimizing for speed normally consists of
 iterations, where the program is profiled, the bottleneck determined
 and then optimized.
-The workflow used here is less vigorous.
-Profiling for identification of bottlenecks is not necessary,
-because it is well established where the bottleneck of molecular
-dynamics programs is: computing the pairwise forces between the
-particles \citep{chiu_et_al_2011}.
-Also, like described above, the guiding principle for rewriting the
-program was increased maintainability and elegance rather than pure
-speed.
+The workflow used here is less vigorous concerning profiling.
+Profiling after each change in order to identify and fix bottlenecks
+is not necessary, because it is well established where the bottleneck
+of molecular dynamics programs is: computing the pairwise forces
+between the particles \citep{chiu_et_al_2011}.
+
+This assumption was validated for this program.
+The update operation of the simulation was split into two parts:
+(\romannumeral 1) computing pairwise forces between the particles and
+(\romannumeral 2) computing the other forces and updating the position
+and velocity of each particle.
+Inlining was disabled and the program run with Intel's VTune 19
+profiler \citep{vtune}.
+The profiler revealed that over 99\% of the runtime is spend computing
+the pairwise forces.
+
+Furthermore, as described above, the guiding principle for rewriting
+of the program was increased maintainability and elegance rather than
+pure speed.
+The codebase is not very big (approximately 250 lines of code) so not
+a lot of time could be wasted on rewriting parts of the code that are
+not part of the critical section.
+
 The guiding tool for the environment specific optimizations was the
 optimization report generated by the compiler with the
 \texttt{-qopt-report=5} flag \citep{qopt_report}.
+Otherwise the benchmark output and a Python script for comparing
+different benchmarks with each other were used to determine the impact
+a change to the source code had on the performance of the program.
+The script basically replaced using an advanced profiler like VTune
+after each change made to the code.
 
 The first step rewriting the code was to remove the utility functions
 and subroutines and inline them by hand (see Section~\ref{subsec:p1}).
@@ -754,16 +771,17 @@ This was done not in consideration of performance, but to better
 enable the rewriting.
 The utility functions were obscuring loops, making it harder to
 properly see loop nests which are crucial for vectorization.
-Looking at the optimization report revealed, that they were inlined
-by the compiler, so no performance difference was measured after
-the hand inlining.
+Looking at the optimization report revealed that they were inlined
+by the compiler.
+Consequently no performance difference was measured after the hand
+inlining.
 
-Algorithm~\ref{alg:old} shows how the update operation per time step,
+Algorithm~\ref{alg:old} shows the update operation per time step,
 as it was originally implemented.
-While, as stated above, computing $\vec{F}_i$ without the pairwise
+As stated above, computing $\vec{F}_i$ without the pairwise
 forces (Equation~\ref{eq:F_all} without
-$\sum_{i \neq j}^n f_{i \leftarrow j}$) is not the critical section,
-the code is still badly written and not optimal.
+$\sum_{i \neq j}^n f_{i \leftarrow j}$) is not the critical section.
+Nonetheless the code is still badly written and not optimal.
 Algorithm~\ref{alg:old}, lines 1--12 are all needed, simply for
 computing Equation~\ref{eq:F_all} without the pairwise forces.
 While \texttt{-O3} enables loop fusion, only the first two loops
@@ -775,7 +793,7 @@ The first step was to reduce the $3n$ iterations to $2n$ iterations by
 fusing the viscosity, wind and central force computations all into
 a single loop setting $\vec{F}_i := -vis_i(\vec{v}_i + \vec{w}) +
   \vec{F}_{i \leftarrow central}$.
-Fusing the loops together by hand reduced in a regression concerning
+Fusing the loops together by hand resulted in a regression concerning
 the program's performance.
 While the best version after phase two took on average 62 seconds
 overall, the version with the fused loops resulted in 64 seconds
@@ -783,17 +801,8 @@ on average.
 This is a drop in performance of approximately 3\%.
 The reason for this drop are reduced efficiency of the pipelines of
 the CPU caused by data hazards.
-The data hazards are caused by output dependencies (write after write)
+The data hazards are due to output dependencies (write after write)
 when computing $\vec{F}_i$ \citep[see e.g.][]{patterson_2014}.
-
-The next step was to beautify the computation of $r$
-(Algorithm~\ref{alg:old}, lines 7--9).
-Figure~\ref{fig:r} shows the original code and the one-liner it
-was transformed to.
-Using Fortran's array syntax makes the code much more readable by
-being more concise and removing ten lines of code.
-Unfortunately, making this change results in a performance regression
-of about 1\% to the version with the fused loops.
 
 \begin{figure} % {{{
   \begin{lstlisting}[language=Fortran]
@@ -820,6 +829,23 @@ of about 1\% to the version with the fused loops.
   \label{fig:r}
 \end{figure} % }}}
 
+The next step was to beautify the computation of $r$
+(Algorithm~\ref{alg:old}, lines 7--9).
+Figure~\ref{fig:r} shows the original code and the one-liner it
+was transformed to.
+Using Fortran's array syntax makes the code much more readable by
+being more concise and removing ten lines of code.
+Unfortunately, making this change results in another performance
+regression of about 1\%.
+The reason for the performance drop is the fact that \texttt{pos(:,:)}
+copies the content of the \texttt{pos} matrix to a new temporal one
+(the performance report revealed a memcpy operation).
+\texttt{pos} is the $n \times 3$ double precisision matrix storing the
+particle vectors $\vec{p}_i$.
+It occupies 96 Kb of memory.
+Copying 96 Kb is a costly operation which is why the code is slower
+than before.
+
 In order to further concise the program, reduce the amount of loops
 and the memory footprint, $r$ was removed from the program completely,
 moving the computation of $||p_i||_2$ into the actual denominator of
@@ -835,21 +861,21 @@ of $n$ and not contiguous in memory.
 This does not leverage locality needed for utilizing the cache for
 fast memory access when doing particle-wise operations, rather than
 dimensional-wise (outer loop over the three dimensions of the particle
-vectors).
+vectors in the Euclidean space of the simulation).
 The current version of the program actually computes $\vec{F}_i$
-dimensional-wise.
+dimensional-wise, utilizing locality.
 $r_i$ can only be computed particle-wise.
 So in order to remove $r$ from the program the loops for computing
-$\vec{F}_i$ were exchanged to being particle-wise.
-While now not leveraging the locality, removing $r$ actually reduces
-the pressure on the cache.
+$\vec{F}_i$ were exchanged to being particle-wise (outer loop over the
+particles instead of over the dimensions of each particle).
+While this change removes leveraging locality, removing $r$ actually
+reduces the pressure on the cache.
 Like stated in Section~\ref{sec:setup}, the whole program uses
 double precision floats.
 For $n = 4096$, this means $r$ alone takes up 32 Kb---the whole L1
 cache.
-When doing particle-wise operations, what actually happens to the
-loop nest is that the inner loop over the three dimensions gets
-unrolled by the compiler.
+The performance report reveals that the inner loop over the three
+dimensions of each particle is actually unrolled by the compiler.
 Removing $r$ from the program resulted in a performance improvement of
 approximately 2\%, still worse than the version of the program after
 phase two.
@@ -869,31 +895,451 @@ Only a single loop is needed for computing $\vec{F}_i$ without the
 pairwise forces and updating $\vec{p}_i$ and $\vec{v}_i$.
 Fusing the two loops is invariant concerning the performance.
 
+\begin{algorithm} % {{{
+  \caption{: original pairwise forces computation}
+  \label{alg:pairwise_old}
+
+  \begin{algorithmic}[1]
+
+    \FOR{i=1,\dots,n}
+      \FOR{j=i+1,\dots,n}
+        \STATE{$\vec{p}_{i,j}$ := $\vec{p}_i - \vec{p}_j$}
+        \COMMENT{$\vec{p}_{i,j}$ is used in loop below and for the
+          numerator in $f_{i \leftarrow j}$}
+      \ENDFOR
+    \ENDFOR
+
+    \FOR{i=1,\dots,n}
+      \FOR{j=i+1,\dots,n}
+        \STATE{$\Delta p_{i,j}$ := $||\vec{p}_{i,j}||_2$}
+        \COMMENT{$\Delta p_{i,j}$ is used in loop below for the
+          denominator in $f_{i \leftarrow j}$}
+      \ENDFOR
+    \ENDFOR
+
+    \FOR{i=1,\dots,n}
+      \FOR{j=i+1,\dots,n}
+        \STATE{$\vec{F}_i := \vec{F}_i + f_{i \leftarrow j}$}
+        \COMMENT{see Equation~\ref{eq:f}}
+        \STATE{$\vec{F}_j := \vec{F}_j + f_{j \leftarrow i}$}
+        \COMMENT{see Equation~\ref{eq:f}}
+      \ENDFOR
+    \ENDFOR
+
+  \end{algorithmic}
+\end{algorithm} % }}}
+
+Next the critical section of the program---computing the pairwise
+forces $f_{i \leftarrow j}$---was optimized.
+How the original program computes the pairwise forces is shown in
+Algorithm~\ref{alg:pairwise_old}.
+First two minor simplifications of the loop nest computing the
+pairwise forces (Algorithm~\ref{alg:pairwise_old}, lines 11--16)
+were conducted.
+Two particles $i$ and $j$ collide, if $||\vec{p}_i - \vec{p}_j||_2 <
+\tau_{i,j} := radius_i + radius_j$ (see Section~\ref{sec:md}).
+$radius_i$ is never read from the file containing the data for each
+particle.
+Instead $\forall i: radius_i := 1/2$ is set in the routine reading
+the particle data from file.
+This way $\forall i,j: \tau_{i,j} = 1$, so we can remove $radius$ from
+the program (saving another 32 Kb of memory) and replace it with a
+single constant.
+The second minor change concerns an unnecessary branch.
+The program counts particle collisions.
+Whenever $||\vec{p}_i - \vec{p}_j||_2 < 1$ a counter is increased.
+Instead of increasing the counter in the if-statement of
+Equation~\ref{eq:f}, a boolean variable is set to true and another
+if-statement is needed for incrementing the collision counter.
+The second if-statement was replaced with incrementing the collision
+counter directly.
+Again the changes increased readability but the program is 5\% slower
+than the fastest version.
+A reason for this performance drop could not be determined, but
+arguably the branch structure was the reason for the drop.
+The old version of the program probably allowed the processor to
+better predict the next branch.
+
+The next change was the first major change of phase three where
+performance was significantly improved.
+Instead of computing $\vec{p}_{i,j}$ and $\Delta p_{i,j}$ in their
+own loops (Algorithm~\ref{alg:pairwise_old}, lines 1--10) for each
+particle and having to save the result in memory for later use in
+computing $f_{i \leftarrow j}$, they were reduced to two temporal
+variables computed in the last loop (Algorithm~\ref{alg:pairwise_old},
+lines 11--16).
+There are $n(n-1)/2$ particle pairs.
+This means removing the two loops results in a reduction of $n(n-1)$
+iterations.
+The original program actually saved $\vec{p}_{i,j}$ and
+$\Delta p_{i,j}$ not in a matrix/array with $n(n-1)/2$ elements but
+in oversized containers with $n^2$ elements.
+This means the array for $\Delta p_{i,j}$ alone takes up 128 Mb
+of memory.
+The matrix which saves $\vec{p}_{i,j}$ takes up 384 Mb of memory.
+The fastest version took on average 62 seconds to complete the whole
+simulation.
+The new version only takes on average 42 seconds to completion, a
+performance improvement of 32\%.
+
+The next two changes tried to reduce the impact of the branch in
+Equation~\ref{eq:f}.
+Computing $f_{i \leftarrow j}$ was changed to a particle-wise
+operation (see above).
+This way the branch was moved up one loop in the nest and the inner
+loop over the dimensions of the Euclidean space was again unrolled.
+This resulted in a 2\% performance improvement.
+
+At this point $f_{i \leftarrow j}$ and $f_{j \leftarrow i}$ were
+still both computed, even though
+$f_{j \leftarrow i} = -f_{i \leftarrow j}$.
+Readability is increased by using
+$\vec{F}_j := \vec{F}_j - f_{i \leftarrow j}$ instead of
+$\vec{F}_j := \vec{F}_j + f_{j \leftarrow i}$
+(see Algorithm~\ref{alg:pairwise_old}, line 14).
+This change has no effect on the performance.
+
 % }}}
 
 \subsection{Fourth Phase} % {{{
 
+\begin{algorithm} % {{{
+  \caption{: computation per time step after phase three}
+  \label{alg:new}
+
+  \begin{algorithmic}[1]
+
+    \FOR{i=1,\dots,n}
+      \FOR{j=i+1,\dots,n}
+        \STATE{$\vec{F}_i := \vec{F}_i + f_{i \leftarrow j}$}
+        \COMMENT{see Equation~\ref{eq:f}}
+        \STATE{$\vec{F}_j := \vec{F}_j - f_{i \leftarrow j}$}
+        \COMMENT{see Equation~\ref{eq:f}}
+      \ENDFOR
+    \ENDFOR
+
+    \FOR{i=1,\dots,n}
+      \STATE{$\vec{F}_i := \vec{F}_i -vis_i(\vec{v}_i + \vec{w})
+        + \vec{F}_{i \leftarrow central}$}
+      \STATE{$\vec{p}_i := \vec{p}_i + \Delta_t \vec{v}_i$}
+      \STATE{$\vec{v}_i := \vec{v}_i + \Delta_t \vec{F}_i/m_i$}
+    \ENDFOR
+
+  \end{algorithmic}
+\end{algorithm} % }}}
+
+The rewrite in phase three was necessary not only for increasing
+maintainability and performance, but also to make the goal of this
+phase easier to achieve.
+This phase concerns itself with hardware and environment specific
+optimizations, mainly enabling vectorization.
+As will be shown below, idiomatic and modern Fortran code makes it
+easy for the compiler to auto-vectorize and only minor efforts were
+needed to enforce vectorization where the compiler could not
+auto-vectorize.
+
+Algorithm~\ref{alg:new} shows how the particles are updated for each
+time step after the optimizations in phase three.
+Up to this point vectorization was still disabled with the
+\texttt{-no-vec} flag.
+The first step of phase four was to enable vectorization.
+The compiler automatically tries to vectorize the code when the
+\texttt{-no-vec} flag is not passed.
+But in order to guide the compiler to fully utilize vectorization,
+\texttt{-no-vec} was replaced with the \texttt{-xCORE-AVX2} and the
+\texttt{-vec-threshold0} flags.
+\texttt{-xCORE-AVX2} tells the compiler to generate AVX2 instructions
+when possible and optimize the code for this instruction set
+\citep{xcore_avx2}.
+\texttt{-vec-threshold0} tells the compiler to vectorize whenever
+possible \citep{vec_threshold0}.
+
+The second loop (Algorithm~\ref{alg:new}, lines 7--11)
+is automatically vectorized by the compiler.
+The inner loops over the three dimensions of the vectors are unrolled.
+The compiler tries to vectorize the inner most loop in a loop nest.
+It is unable to vectorize the inner loop for computing the pairwise
+forces (ranging over $j=i+1,\dots,n$), because of data dependencies
+(flow and anti dependency for updating $\vec{F}_i$).
+Like stated in Section~\ref{subsec:p3}, the pairwise forces loop takes
+over 99\% of all the runtime of the program.
+Therefore it is not surprising that the vectorized second loop does
+not speed-up the program.
+Without making the pairwise loop vectorize, enabling vectorization is
+not increasing the performance.
+
+The inner loop of computing the pairwise forces was vectorized using
+OpenMP 4.5's simd directive \citep{omp}.
+The outer loop could not be properly vectorized, because of the
+irregularity of the inner loop, it depending on $i$.
+This hindered OpenMP to successfully collapse the inner and outer
+loops.
+In order to cope with the flow and anti dependencies $\vec{F}_i$ was
+removed from the inner loop and replaced with a temporal reduction
+variable $\vec{F}^\prime_i$.
+The temporal variable was integrated into $\vec{F}_i$ by setting
+$\vec{F}_i := \vec{F}_i + \vec{F}^\prime_i$ after the inner loop
+completes.
+Using the reduction clause of the simd directive over
+$\vec{F}^\prime_i$, the inner loop was vectorized successfully.
+The average overall runtime of the program was reduced from 42 seconds
+to 37 seconds, an increase in performance of 12\%.
+
+Looking at the performance report revealed that the compiler thinks
+accessing the vectors $\vec{p}_j$ and $\vec{F}_j$ is unaligned.
+Telling the compiler that these are actually aligned accesses (with a
+stride of $n$) with the \texttt{!dir\$ vector aligned} compiler hint
+did not increase the performance.
+All other array and matrix accesses are automatically aligned.
+
+One major part of the optimization strategy was reducing loops.
+The last step to reduce the amount of loops in the program to the
+minimal amount was to fuse the outer loop of computing the
+pairwise forces (Algorithm~\ref{alg:new}, line 1) with the update loop
+(Algorithm~\ref{alg:new}, line 7).
+This destroys the vectorization of the update loop while reducing the
+amount of iterations performed by the program.
+But instead of unrolling the dimensional-wise vector operations
+(Algorithm~\ref{alg:new}, lines 8--10), they were vectorized by the
+compiler.
+Fusing the two loops did not increase the performance.
+Algorithm~\ref{alg:final} shows the structure of the final version of
+the update operation executed for each time step of the simulation.
+
+At this point all dimensional-wise operations were replaced with
+particle-wise.
+The dimensions of the matrices containing the particle vectors are
+still $n \times 3$, so the dimensions in the Euclidean space of the
+simulation of the particle vectors are stored contiguously in memory.
+This means particle-wise operations are strided with a stride of $n$,
+reducing the utilization of the cache (see Section~\ref{subsec:p3}).
+
+The last part of the rewriting process tried to increase the cache
+utilization by transposing the matrices containing the particle
+vectors to remove the stride from particle-wise operations.
+Transposing the matrices was done after vectorization was enabled.
+First vectorization was enabled, because this way possible
+alignment issues with the transposed version are exposed.
+Vectorization works best with aligned base pointers.
+For Cirrus's Broadwell processor (see Section~\ref{sec:setup}) the
+data is best aligned on 64 byte boundaries \citep{krishnaiyer2015}.
+A particle vector is only 24 bytes long.
+Accessing every particle except the first is not aligned based on the
+64 byte boundary.
+As expected, making particles contiguous in memory reduced the
+performance by 5\%, from 38 seconds to 40 seconds, because accessing
+the particles is not aligned anymore.
+The processor can handle strided loads and stores better than it can
+handle unaligned accesses.
+
+\begin{algorithm} % {{{
+  \caption{: final computation per time step}
+  \label{alg:final}
+
+  \begin{algorithmic}[1]
+
+    \FOR{i=1,\dots,n}
+
+      \FOR{j=i+1,\dots,n}
+        \STATE{$\vec{F}^\prime_i := \vec{F}^\prime_i
+          + f_{i \leftarrow j}$}
+        \COMMENT{see Equation~\ref{eq:f}}
+        \STATE{$\vec{F}_j := \vec{F}_j - f_{i \leftarrow j}$}
+        \COMMENT{see Equation~\ref{eq:f}}
+      \ENDFOR
+
+      \STATE{$\vec{F}_i := \vec{F}_i + \vec{F}^\prime_i
+        -vis_i(\vec{v}_i + \vec{w}) + \vec{F}_{i \leftarrow central}$}
+      \STATE{$\vec{p}_i := \vec{p}_i + \Delta_t \vec{v}_i$}
+      \STATE{$\vec{v}_i := \vec{v}_i + \Delta_t \vec{F}_i/m_i$}
+    \ENDFOR
+
+  \end{algorithmic}
+\end{algorithm} % }}}
+
 % }}}
 
+\subsection{Fifth Phase} % {{{
+\label{subsec:p5}
 
-% journey through time
+The fifth and last phase was again about using the compiler to
+increase the performance.
+To this point the program was compiled with the following flags:
+\texttt{-fpp}, \texttt{-qopenmp}, \texttt{-O3}, \texttt{xCORE-AVX2}
+and \texttt{-vec-threshold0}.
+Only the last three flags are relevant for performance, while the
+first two just enable features used in the program (Fortran
+preprocessor and OpenMP).
+Some more aggressive compiler optimizations were tried to further
+increase the performance.
+Table~\ref{tab:p5} lists the compiler flags tested and their impact on
+the program's performance.
 
-% discuss every thought I had
+The best version of the program at this point took on average 37
+seconds to complete the simulation.
+\texttt{-Ofast} was tried in phase two.
+It did not increase performance on the unoptimized version of the
+program.
+On the optimized version of the program on the other hand
+\texttt{-Ofast} results in improved performance.
+Ten seconds are cut off of the simulation's overall runtime. That
+is an improvement of 27\%.
 
-% use pseudo code and small fortran snippets for visualization
+\texttt{-Ofast} makes additional performance optimization to the
+floating point model.
+Because they worked so well two additional compiler optimizations for
+floating point speed were tried: \texttt{-fp-speculation=fast} and
+\texttt{-fma}.
+\texttt{-fp-speculation=fast} enables floating point speculation which
+can relax the way floating point operations are carried out
+\citep{fp_speculation}.
+\texttt{-fma} tells the compiler to use vectorized fused multiply-add
+instructions where applicable \citep{fma}.
+Neither enhances the performance of the program.
 
-% make it clear that I could use common sense most of the time,
-% but include vtune results and io time
+Next the maximum level of software prefetching was enabled in order to
+increase the cache hit-rate.
+This is done with the \texttt{-qopt-prefetch=5} flag
+\citep{qopt_prefetch}.
+This resulted in a 5\% performance improvement, taking away another
+second of average overall time.
+
+Lastly the compiler was told to optimize the memory structure of the
+program.
+This was done with the \texttt{-qopt-mem-layout-trans=3} and the
+\texttt{-pad} flags \citep{qopt_mem_layout_trans, pad}.
+Neither benefited the program.
+
+Phase five was the last phase of the optimization process.
+Both maintainability and performance of the program were significantly
+improved.
+Approximately 20\% of the source code was removed.
+A test setting which enables regression tests was added.
+The program was successfully vectorized and the memory usage was cut
+down drastically.
+The unoptimized version of the program took on average 1270 seconds
+to finish the simulation described in Section~\ref{sec:setup}.
+The final version took 26 seconds on average.
+98\% of the time the original program took for the simulation was
+successfully removed.
+
+\begin{table}
+  \begin{tabu}{|X|l|l|l|l|}
+    \hline
+    Optimization &$\emptyset$ overall time
+                 &$\emptyset$ superstep time  &$+/-\%$ &Status \\
+    \hline
+    \texttt{-Ofast} &27s &5s &27\% &Improvement \\
+    \hline
+    \texttt{-fp-speculation=fast} &27s &5s &0\% &Invariant \\
+    \hline
+    \texttt{-fma} &27s &5s &0\% &Invariant \\
+    \hline
+    \texttt{-qopt-prefetch=5} &26s &5s &5\% &Improvement \\
+    \hline
+    \texttt{-qopt-mem-layout-trans=3} &26s &5s &0\% &Invariant \\
+    \hline
+    \texttt{-pad} &26s &5s &0\% &Invariant \\
+    \hline
+  \end{tabu}
+  \caption{Compiler flags tried during the fifth phase of
+    optimization (compare Table~\ref{tab:p2}).}
+  \label{tab:p5}
+\end{table}
+
+% }}}
 
 % }}}
 
 \section{Discussion} % {{{
 \label{sec:dis}
 
+This section will discuss the most remarkable observations made during
+the optimization process.
+Most remarkably is the fact that well readable, idiomatic and modern
+Fortran code that uses high level features like array slicing results
+in a very well performing program which is also easy to maintain.
+A big performance gain of idiomatic code observed was that it
+allowed the compiler to properly optimize.
+
+Table~\ref{tab:discussion} shows the average overall performance of
+the best version of the program after each optimization phase.
+Clearly the biggest performance gains were made in phase two.
+Phase two enabled compiler optimization in the first place.
+In phases three and four the program was rewritten to be more
+maintainable and faster.
+A lot of memory was saved, as was runtime.
+Compared to the unoptimized version of the program which was used in
+phase two, another performance gain of 40\% was achieved by rewriting
+the program and enabling vectorization.
+But more remarkably are the results of phase five.
+The fifth phase was again about utilizing the compiler to increase
+the performance further.
+\texttt{-Ofast} was tried in phase two.
+It did not increase the performance of the unoptimized version of the
+program (see Section~\ref{subsec:p2}).
+\texttt{-Ofast} on the optimized version on the other hand resulted in
+a performance gain of 27\% (see Section~\ref{subsec:p5}).
+Combining the raw speed gains of the optimized version with the
+speed gains it enabled by allowing the compiler to properly optimize,
+the optimized version gains 58\% on the unoptimized version of the
+program.
+This is a remarkable number and validates the rewriting of the program
+as successful from a performance perspective.
+
+Like stated above, not only is raw performance considered during the
+optimization process, but also maintainability.
+Maintainability is not as easy to measure as is performance.
+The best measurement that can be presented is, that the
+optimized version is 20\% smaller concerning the lines of code than
+the original program.
+The build process is also much simplified and only a single source
+file is needed compared to the four files of the unoptimized version
+of the program.
+The optimized version leverages (relatively) modern Fortran
+features like modules over old-fashioned ones like \texttt{COMMON}
+blocks to increase its maintainability (see Section~\ref{subsec:p1}).
+
+\begin{table}
+  \begin{tabu}{|X|c|c|c|c|c|c|}
+    \hline
+      &Original &Phase one &Phase two &Phase three &Phase four
+      &Phase five \\
+    \hline
+    $\emptyset$ overall time &1270s &1110s &62s &42s &37s &26s \\
+    \hline
+    $+/-\%$ &- &13\% &94\% &32\% &12\% &30\% \\
+    \hline
+  \end{tabu}
+  \caption{Benchmark results after each optimization phase.}
+  \label{tab:discussion}
+\end{table}
+
 % }}}
 
 \section{Conclusion} % {{{
 \label{sec:con}
+
+The optimization process described in Section~\ref{sec:opt} is
+considered to be successful from both perspectives: performance and
+maintainability.
+The original version of the program took on average 1270 seconds to
+complete the simulation described in Section~\ref{sec:setup}.
+The final version of the program took only 26 seconds to complete the
+same simulation.
+That is a performance gain of 98\%.
+
+These gains were mainly due to the proper utilization of the compiler.
+The most remarkable observation made during the optimization process
+was the fact that idiomatic and modern Fortran code makes it
+easy for the compiler to optimize, while also increasing the
+maintainability of the program.
+
+This paper only considered serial performance.
+The obvious next step to further increase the program's performance
+and enable much bigger simulations would be to parallelize it to
+multiple threads (using e.g.\ OpenMP) or even distribute it to
+multiple nodes (e.g.\ with MPI).
 
 % }}}
 
