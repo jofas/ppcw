@@ -1,10 +1,8 @@
-PROG=src/history.f90
-#PROG=src/main.f90
+PROG=src/main.f90
 FFLAGS_PROFILE=-fno-inline-functions
 FFLAGS_BENCH=-qopt-report=5
-#FFLAGS=-Ofast -fpp -qopenmp -vec-threshold0 -xCORE-AVX2 \
-	-align array64byte -ipo -qopt-prefetch=5
-FFLAGS=-O3 -fpp -no-vec
+FFLAGS=-Ofast -fpp -xCORE-AVX2 -qopenmp -vec-threshold0 \
+			 -qopt-prefetch=5
 FC=ifort
 
 all: test test_all bench profile
